@@ -2,7 +2,7 @@
 
 
 
-\# Takım Adı
+**# Takım Adı**
 
 
 
@@ -10,7 +10,7 @@ HALLEDERİZ - Team 9
 
 
 
-\## Takım Rolleri
+**## Takım Rolleri**
 
 
 
@@ -26,7 +26,7 @@ HALLEDERİZ - Team 9
 
 
 
-\## Ürün Adı
+**## Ürün Adı**
 
 
 
@@ -34,7 +34,7 @@ HALLEDERİZ - Team 9
 
 
 
-\## Ürün Açıklaması
+**## Ürün Açıklaması**
 
 
 
@@ -42,7 +42,7 @@ HALLEDERİZ - Team 9
 
 
 
-\## Ürün Özellikleri
+**## Ürün Özellikleri**
 
 
 
@@ -66,7 +66,7 @@ HALLEDERİZ - Team 9
 
 
 
-\## Hedef Kitle
+**## Hedef Kitle**
 
 
 
@@ -80,11 +80,11 @@ HALLEDERİZ - Team 9
 
 
 
-\## Ürün Geliştirme Listesi URL'si
+**## Ürün Geliştirme Listesi URL'si**
 
 
 
-\## \[Ürün Geliştirme Listesi](https://trello.com/b/mn6hZJ0Y/ai-sdr-hallederiz-team-9-sprint-1)
+\## \[Ürün Geliştirme Listesi] (https://trello.com/b/mn6hZJ0Y/ai-sdr-hallederiz-team-9-sprint-1)
 
 
 
@@ -92,11 +92,17 @@ HALLEDERİZ - Team 9
 
 
 
-\# Sprint 1
+**# SPRİNT 1**
 
 
 
-\*\*Backlog düzeni ve Hikaye seçimleri\*\*: Proje boyunca toplam 300 puanlık bir backlog hedeflenmiştir. Bu puan üç sprinte eşit değil, her sprintin doğasına göre dağıtılmıştır: Sprint 1 için 80 puan, Sprint 2 için 140 puan, Sprint 3 için 80 puan hedeflenmiştir. Sprint 1'de öncelik, ürünün vizyonunu netleştirmek, sistem mimarisini tasarlamak ve ekibin teknik/organizasyonel altyapısını kurmak olarak belirlenmiştir. 
+
+
+**\*\*Backlog düzeni ve Hikaye seçimleri\*\***
+
+
+
+Proje boyunca toplam 300 puanlık bir backlog hedeflenmiştir. Bu puan üç sprinte eşit değil, her sprintin doğasına göre dağıtılmıştır: Sprint 1 için 80 puan, Sprint 2 için 140 puan, Sprint 3 için 80 puan hedeflenmiştir. Sprint 1'de öncelik, ürünün vizyonunu netleştirmek, sistem mimarisini tasarlamak ve ekibin teknik/organizasyonel altyapısını kurmak olarak belirlenmiştir. 
 
 
 
@@ -104,11 +110,23 @@ Backlog'a şu maddeler alınmıştır: proje fikri ve kazanma tezinin netleştir
 
 
 
-\- \*\*Daily Scrum\*\*: Ekip üyelerinin farklı programları nedeniyle günlük toplantılar sabit bir saatte değil, WhatsApp üzerinden kısa check-in mesajlarıyla yürütülmüştür. Sprint 1 boyunca ekip, ilerlemeyi ve karar noktalarını tartışmak üzere 2 Temmuz'da bir Google Meet toplantısı gerçekleştirmiş, bu toplantıda proje mimarisi ve kod planı ekip olarak birlikte gözden geçirilmiştir. \[Sprint 1 Daily Scrum / Meet Ekran Görüntüleri](BURAYA\_LİNK\_VEYA\_DOSYA\_YOLU)
+
+
+**\*\*Daily Scrum\*\***
 
 
 
-\- \*\*Sprint panosu güncellemesi\*\*: Sprint panosu ekran görüntüleri:
+Ekip üyelerinin farklı programları nedeniyle günlük toplantılar sabit bir saatte değil, WhatsApp üzerinden kısa check-in mesajlarıyla yürütülmüştür. Sprint 1 boyunca ekip, ilerlemeyi ve karar noktalarını tartışmak üzere 2 Temmuz'da bir Google Meet toplantısı gerçekleştirmiş, bu toplantıda proje mimarisi ve kod planı ekip olarak birlikte gözden geçirilmiştir. \[Sprint 1 Daily Scrum / Meet Ekran Görüntüleri](BURAYA\_LİNK\_VEYA\_DOSYA\_YOLU)
+
+
+
+
+
+**\*\*Sprint panosu güncellemesi\*\***
+
+
+
+Sprint panosu ekran görüntüleri:
 
 
 
@@ -116,11 +134,9 @@ Backlog'a şu maddeler alınmıştır: proje fikri ve kazanma tezinin netleştir
 
 
 
-\- \*\*Ürün Durumu\*\*: Ekran görüntüleri:
 
 
-
-&#x20; \*\*Ürün Durumu\*\*: Ekran görüntüleri:
+**\*\*Ürün Durumu\*\*** 
 
 
 
@@ -132,17 +148,21 @@ Next.js ile panel arayüzünün prototipi oluşturulmuştur. Bu prototip, örnek
 
 
 
-\- \*\*Sprint Review\*\*
+
+
+**\*\*Sprint Review\*\***
 
 
 
-&#x20;Alınan kararlar: Sprint 1'de ekip, ürünün genel vizyonunu ve kazanma tezini netleştirmiştir — "az ama derin" yaklaşımıyla, çok sayıda firmaya genel mesaj atmak yerine az sayıda hedefe derinlemesine araştırmaya dayalı, kişiselleştirilmiş temas kurulması hedeflenmiştir. Sistemin 8 adımlı akışı detaylandırılmış ve her adımın hangi araçla besleneceği belirlenmiştir. Panel arayüzü örnek verilerle tasarlanmış ve ekip tarafından incelenmiştir. Gerçek API entegrasyonlarının henüz kurulmadığı, bunun bilinçli olarak Sprint 2'ye planlandığı tespit edilmiştir. 
+Alınan kararlar: Sprint 1'de ekip, ürünün genel vizyonunu ve kazanma tezini netleştirmiştir — "az ama derin" yaklaşımıyla, çok sayıda firmaya genel mesaj atmak yerine az sayıda hedefe derinlemesine araştırmaya dayalı, kişiselleştirilmiş temas kurulması hedeflenmiştir. Sistemin 8 adımlı akışı detaylandırılmış ve her adımın hangi araçla besleneceği belirlenmiştir. Panel arayüzü örnek verilerle tasarlanmış ve ekip tarafından incelenmiştir. Gerçek API entegrasyonlarının henüz kurulmadığı, bunun bilinçli olarak Sprint 2'ye planlandığı tespit edilmiştir. 
 
 Sprint Review katılımcıları: Zeynep İbiş, Rumeysa Songür, Furkan Çeşitler, Taha Demirkan, Zehra Nur Gölünç.
 
 
 
-\- \*\*Sprint Retrospective\*\*
+
+
+**\*\*Sprint Retrospective\*\***
 
 
 
@@ -162,7 +182,7 @@ Sprint Review katılımcıları: Zeynep İbiş, Rumeysa Songür, Furkan Çeşitl
 
 
 
-\# Sprint 2
+**# SPRİNT 2**
 
 
 
@@ -170,7 +190,7 @@ Sprint Review katılımcıları: Zeynep İbiş, Rumeysa Songür, Furkan Çeşitl
 
 
 
-\# Sprint 3
+**# SPRİNT 3**
 
 
 
