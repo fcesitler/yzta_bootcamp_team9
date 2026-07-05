@@ -116,7 +116,21 @@ Backlog'a şu maddeler alınmıştır: proje fikri ve kazanma tezinin netleştir
 
 
 
-Ekip üyelerinin farklı programları nedeniyle günlük toplantılar sabit bir saatte değil, WhatsApp üzerinden kısa check-in mesajlarıyla yürütülmüştür. Sprint 1 boyunca ekip, ilerlemeyi ve karar noktalarını tartışmak üzere 2 Temmuz'da bir Google Meet toplantısı gerçekleştirmiş, bu toplantıda proje mimarisi ve kod planı ekip olarak birlikte gözden geçirilmiştir. \[Sprint 1 Daily Scrum / Meet Ekran Görüntüleri](BURAYA\_LİNK\_VEYA\_DOSYA\_YOLU)
+Ekip üyelerinin farklı programları nedeniyle günlük toplantılar sabit bir saatte değil, WhatsApp üzerinden kısa check-in mesajlarıyla yürütülmüştür. Sprint 1 boyunca ekip, ilerlemeyi ve karar noktalarını tartışmak üzere 2 Temmuz'da bir Google Meet toplantısı gerçekleştirmiş, bu toplantıda proje mimarisi ve kod planı ekip olarak birlikte gözden geçirilmiştir. 
+
+
+
+\[Sprint 1 Daily Scrum / Meet Ekran Görüntüleri] !\[WhatsApp/Meet 1](Sprint1\_Screenshots/Sprint%201.1.png)
+
+!\[WhatsApp/Meet 2](Sprint1\_Screenshots/Sprint%201.2.png)
+
+!\[WhatsApp/Meet 3](Sprint1\_Screenshots/Sprint%201.3.png)
+
+!\[WhatsApp/Meet 4](Sprint1\_Screenshots/Sprint%201.4.png)
+
+!\[WhatsApp/Meet 5](Sprint1\_Screenshots/Sprint%201.5.png)
+
+!\[WhatsApp/Meet 6](Sprint1\_Screenshots/Sprint%201.6.png)
 
 
 
@@ -130,7 +144,13 @@ Sprint panosu ekran görüntüleri:
 
 
 
-&#x20; \[Buraya Trello board ekran görüntüsü eklenecek]
+!\[Trello Board 1](Sprint1\_Screenshots/PM-1.1.png)
+
+!\[Trello Board 2](Sprint1\_Screenshots/PM-1.2.png)
+
+!\[Trello Board 3](Sprint1\_Screenshots/PM-1.3.png)
+
+!\[Trello Board 4](Sprint1\_Screenshots/PM-1.4.png)
 
 
 
@@ -144,7 +164,17 @@ Next.js ile panel arayüzünün prototipi oluşturulmuştur. Bu prototip, örnek
 
 
 
-&#x20; \[Buraya panel ekran görüntüleri eklenecek]
+!\[Ürün Görsel 1](Sprint1\_Screenshots/ÜrünGörsel-1.jpeg)
+
+!\[Ürün Görsel 2](Sprint1\_Screenshots/ÜrünGörsel-2.jpeg)
+
+!\[Ürün Görsel 3](Sprint1\_Screenshots/ÜrünGörsel-3.jpeg)
+
+!\[Ürün Görsel 4](Sprint1\_Screenshots/ÜrünGörsel-4.jpeg)
+
+!\[Ürün Görsel 5](Sprint1\_Screenshots/ÜrünGörsel-5.jpeg)
+
+!\[Ürün Görsel 6](Sprint1\_Screenshots/ÜrünGörsel-6.jpeg)
 
 
 
