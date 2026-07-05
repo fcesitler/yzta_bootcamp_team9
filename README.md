@@ -83,8 +83,7 @@ HALLEDERİZ - Team 9
 **## Ürün Geliştirme Listesi URL'si**
 
 
-
-\## \[Ürün Geliştirme Listesi] (https://trello.com/b/mn6hZJ0Y/ai-sdr-hallederiz-team-9-sprint-1)
+[Trello Panosu](https://trello.com/b/mn6hZJ0Y/ai-sdr-hallederiz-team-9-sprint-1)
 
 
 
