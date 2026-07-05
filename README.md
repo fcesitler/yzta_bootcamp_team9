@@ -119,7 +119,7 @@ Ekip üyelerinin farklı programları nedeniyle günlük toplantılar sabit bir 
 
 
 
-\[Sprint 1 Daily Scrum / Meet Ekran Görüntüleri] 
+\[Sprint 1 Daily Scrum / WP-Meet Ekran Görüntüleri] 
 
 ![WhatsApp/Meet 1](Sprint1_Screenshots/Sprint%201.1.png)
 ![WhatsApp/Meet 2](Sprint1_Screenshots/Sprint%201.2.png)
