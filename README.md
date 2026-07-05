@@ -83,10 +83,15 @@ HALLEDERİZ - Team 9
 **## Ürün Geliştirme Listesi URL'si**
 
 
+[Trello Panosu](https://trello.com/b/mn6hZJ0Y/ai-sdr-hallederiz-team-9-sprint-1)
 
-\## \[Ürün Geliştirme Listesi] (https://trello.com/b/mn6hZJ0Y/ai-sdr-hallederiz-team-9-sprint-1)
 
 
+### Sprint 1 - Burndown Chart
+
+![Burndown Chart](Sprint1_Screenshots/burndown-chart.png)
+
+Not: Günlük ilerleme takibi yapılmadığı için grafik yalnızca sprint başı (19 Haziran, 80 puan) ve sprint sonu (5 Temmuz, 0 puan) gerçek verilerini göstermektedir.
 
 \---
 
@@ -120,7 +125,7 @@ Ekip üyelerinin farklı programları nedeniyle günlük toplantılar sabit bir 
 
 
 
-\[Sprint 1 Daily Scrum / Meet Ekran Görüntüleri] 
+\[Sprint 1 Daily Scrum / WP-Meet Ekran Görüntüleri] 
 
 ![WhatsApp/Meet 1](Sprint1_Screenshots/Sprint%201.1.png)
 ![WhatsApp/Meet 2](Sprint1_Screenshots/Sprint%201.2.png)
@@ -170,7 +175,7 @@ Next.js ile panel arayüzünün prototipi oluşturulmuştur. Bu prototip, örnek
 
 
 
-Alınan kararlar: Sprint 1'de ekip, ürünün genel vizyonunu ve kazanma tezini netleştirmiştir — "az ama derin" yaklaşımıyla, çok sayıda firmaya genel mesaj atmak yerine az sayıda hedefe derinlemesine araştırmaya dayalı, kişiselleştirilmiş temas kurulması hedeflenmiştir. Sistemin 8 adımlı akışı detaylandırılmış ve her adımın hangi araçla besleneceği belirlenmiştir. Panel arayüzü örnek verilerle tasarlanmış ve ekip tarafından incelenmiştir. Gerçek API entegrasyonlarının henüz kurulmadığı, bunun bilinçli olarak Sprint 2'ye planlandığı tespit edilmiştir. 
+Sprint 1'de ekip, ürünün genel vizyonunu ve kazanma tezini netleştirmiştir — "az ama derin" yaklaşımıyla, çok sayıda firmaya genel mesaj atmak yerine az sayıda hedefe derinlemesine araştırmaya dayalı, kişiselleştirilmiş temas kurulması hedeflenmiştir. Sistemin 8 adımlı akışı detaylandırılmış ve her adımın hangi araçla besleneceği belirlenmiştir. Panel arayüzü örnek verilerle tasarlanmış ve ekip tarafından incelenmiştir. Gerçek API entegrasyonlarının henüz kurulmadığı ve bunun bilinçli olarak Sprint 2'ye bırakılması kararı alınmıştır.
 
 Sprint Review katılımcıları: Zeynep İbiş, Rumeysa Songür, Furkan Çeşitler, Taha Demirkan, Zehra Nur Gölünç.
 
