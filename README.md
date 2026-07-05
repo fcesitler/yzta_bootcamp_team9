@@ -87,6 +87,12 @@ HALLEDERİZ - Team 9
 
 
 
+### Sprint 1 - Burndown Chart
+
+![Burndown Chart](Sprint1_Screenshots/burndown-chart.png)
+
+Not: Günlük ilerleme takibi yapılmadığı için grafik yalnızca sprint başı (19 Haziran, 80 puan) ve sprint sonu (5 Temmuz, 0 puan) gerçek verilerini göstermektedir.
+
 \---
 
 
