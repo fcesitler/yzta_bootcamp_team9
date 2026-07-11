@@ -1,0 +1,57 @@
+/* Hallederiz — AI SDR · Marka renk sistemi
+ * Palet: "Orman & Limon" (nihai karar, 2026-07-11)
+ * Çapa: Orman yeşili #1C4B3C · Vurgu (spark): Limon #B6E82F
+ * Kullanım: forest = birincil (buton, aktif nav, başlık vurgu),
+ *           lime = kıvılcım/aksan (logo spark, funnel highlight, küçük vurgular — beyaz üstünde METİN olarak KULLANMA, kontrast düşük),
+ *           amber = uyarı/"senin sıran", red = hata, slate = nötr iskele.
+ */
+:root {
+  /* Orman (forest) — birincil marka skalası */
+  --forest-50:  #EAF1EC;
+  --forest-100: #CBDDD1;
+  --forest-200: #9FC0AB;
+  --forest-400: #4E846B;
+  --forest-600: #2E6B54;
+  --forest-700: #226B4F;
+  --forest-800: #1C4B3C;  /* birincil */
+  --forest-900: #10362A;
+
+  /* Limon (lime) — vurgu / spark */
+  --lime-50:  #F2F8DE;
+  --lime-100: #E6F3BE;
+  --lime-200: #D3EDA6;
+  --lime-400: #C7EA5A;
+  --lime-500: #B6E82F;    /* aksan */
+  --lime-700: #8CC24E;
+
+  /* Nötr — sıcak kâğıt + slate iskele */
+  --paper:      #F3F4EC;  /* sayfa arka planı */
+  --surface:    #FFFFFF;  /* kart yüzeyi */
+  --surface-2:  #EFF0E8;  /* ikincil yüzey */
+  --ink:        #1C4B3C;  /* marka metin (koyu) */
+  --text-strong:#0F172A;  /* ana metin (slate-900) */
+  --text:       #334155;  /* gövde */
+  --text-muted: #64748B;  /* ikincil */
+  --text-faint: #94A3B8;  /* ipucu/placeholder */
+  --border:     #E5E7EB;  /* hairline */
+  --border-2:   #D9DDD2;  /* vurgulu ayraç (sıcak) */
+
+  /* Semantik roller */
+  --positive:   #3B7A2E;  /* olumlu delta / gönderildi */
+  --positive-bg:#E3F3C6;
+  --warning:    #B45309;  /* "senin sıran" / onay bekliyor */
+  --warning-bg: #FEF3C7;
+  --danger:     #BE123C;  /* itiraz / hata */
+  --danger-bg:  #FFE4E6;
+
+  /* Purpose eşlemeleri (bileşenlerin okuyacağı katman) */
+  --brand:            var(--forest-800);
+  --brand-hover:      var(--forest-700);
+  --brand-contrast:   var(--paper);      /* forest üstündeki metin */
+  --accent:           var(--lime-500);
+  --accent-soft:      var(--lime-100);
+  --nav-active-bg:    var(--forest-50);
+  --nav-active-text:  var(--forest-800);
+  --radius:           10px;
+  --radius-card:      12px;
+}
