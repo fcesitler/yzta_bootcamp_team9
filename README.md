@@ -211,6 +211,12 @@ Sprint 2 hedefi 140 puan olarak belirlenmiştir. Sprint 1'in aksine bu sprintte 
 Sprint ortasında ekip, backlog'a **Pazar Araştırması** (ICP netleştirme, rakip analizi, fiyatlandırma/pazar büyüklüğü, pilot firma adayları) maddesini +10 puanla eklemiştir; bu ekleme, Supabase kartının kapsamının MVP'ye göre daraltılmasıyla dengelenmiş, toplam 140 puan sabit tutulmuştur.
 
 
+**## Ürün Geliştirme Listesi URL'si**
+
+
+[Trello Panosu](https://trello.com/b/mn6hZJ0Y/ai-sdr-hallederiz-team-9-sprint-2)
+
+
 **Daily Scrum Notları**
 
 Ekip, Sprint 2 boyunca WhatsApp üzerinden düzenli check-in'ler yapmaya devam etmiştir. Ayrıca 12 Temmuz ve 18 Temmuz tarihlerinde Google Meet üzerinden iki ayrı toplantı gerçekleştirilmiş; bu toplantılarda entegrasyon durumları, karşılaşılan teknik engeller ve kalan işler ekip olarak birlikte gözden geçirilmiştir.
