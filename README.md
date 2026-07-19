@@ -204,6 +204,75 @@ Sprint Review katılımcıları: Zeynep İbiş, Rumeysa Songür, Furkan Çeşitl
 **# SPRİNT 2**
 
 
+**Backlog Dağıtma Mantığı**
+
+Sprint 2 hedefi 140 puan olarak belirlenmiştir. Sprint 1'in aksine bu sprintte öncelik, gerçek API entegrasyonlarının kurulmasına verilmiştir: Make orkestrasyon akışının canlıya alınması, Apollo/Firecrawl/Tavily ile gerçek veri toplama, Claude API ile ICP skorlama ve mesaj üretimi, Supabase hafıza yapısı ve gerçek e-posta gönderim entegrasyonu. Kendi kazanma tezimizle uyumlu olarak "dar dikey MVP" yaklaşımı benimsenmiş — onlarca firma yerine tek bir gerçek firma üzerinden uçtan uca çalışan bir zincir kurmak öncelik olarak belirlenmiştir.
+
+Sprint ortasında ekip, backlog'a **Pazar Araştırması** (ICP netleştirme, rakip analizi, fiyatlandırma/pazar büyüklüğü, pilot firma adayları) maddesini +10 puanla eklemiştir; bu ekleme, Supabase kartının kapsamının MVP'ye göre daraltılmasıyla dengelenmiş, toplam 140 puan sabit tutulmuştur.
+
+
+**Daily Scrum Notları**
+
+Ekip, Sprint 2 boyunca WhatsApp üzerinden düzenli check-in'ler yapmaya devam etmiştir. Ayrıca 12 Temmuz ve 18 Temmuz tarihlerinde Google Meet üzerinden iki ayrı toplantı gerçekleştirilmiş; bu toplantılarda entegrasyon durumları, karşılaşılan teknik engeller ve kalan işler ekip olarak birlikte gözden geçirilmiştir.
+
+![Daily Scrum 1](Sprint2_Screenshots/Sprint%202.1.png)
+![Daily Scrum 2](Sprint2_Screenshots/Sprint%202.2.png)
+![Daily Scrum 3](Sprint2_Screenshots/Sprint%202.3.png)
+![Daily Scrum 4](Sprint2_Screenshots/Sprint%202.4.png)
+![Daily Scrum 5](Sprint2_Screenshots/Sprint%202.5.png)
+![Daily Scrum 6](Sprint2_Screenshots/Sprint%202.6.png)
+![Daily Scrum 7](Sprint2_Screenshots/Sprint%202.7.png)
+![Daily Scrum 8](Sprint2_Screenshots/Sprint%202.8.png)
+![Daily Scrum 9](Sprint2_Screenshots/Sprint%202.9.png)
+![Daily Scrum 10](Sprint2_Screenshots/Sprint%202.10.png)
+
+
+**Sprint Board Updates**
+
+![Trello Board 1](Sprint2_Screenshots/PM-2.1.png)
+![Trello Board 2](Sprint2_Screenshots/PM-2.2.png)
+![Trello Board 3](Sprint2_Screenshots/PM-2.3.png)
+![Trello Board 4](Sprint2_Screenshots/PM-2.4.png)
+![Trello Board 5](Sprint2_Screenshots/PM-2.5.png)
+![Trello Board 6](Sprint2_Screenshots/PM-2.6.png)
+
+
+**Ürün Durumu**
+
+Sprint 2'de aşağıdaki entegrasyonlar gerçek API/veri ile kurulmuş ve çalıştırma geçmişiyle (execution history) doğrulanmıştır: Make orkestrasyon akışları (yanıt sınıflandırma, e-posta gönderim, sözleşme taslağı oluşturma) kurulmuş ve başarılı çalıştırmalarla doğrulanmıştır.
+
+![Make Akışı 1](Sprint2_Screenshots/make1.jpeg)
+![Make Akışı 2](Sprint2_Screenshots/make2.jpeg)
+![Make Akışı 3](Sprint2_Screenshots/make3.jpeg)
+![Make Akışı 4](Sprint2_Screenshots/make4.jpeg)
+
+
+Supabase hafıza yapısı MCP bağlantısı üzerinden Make akışlarına entegre edilmiştir. Cal.com entegrasyonu planlanandan erken tamamlanmıştır. Apollo, Firecrawl ve Tavily ücretsiz katmanda test edilmiş ve çalıştıkları doğrulanmıştır; nihai araç seçimi Sprint 3'e bırakılmıştır. Next.js panel arayüzü hâlâ örnek (mock) verilerle çalışmaktadır, gerçek veriye bağlanma Sprint 3'te tamamlanacaktır.
+
+![Ürün Görsel 1](Sprint2_Screenshots/ÜrünGörsel-1.jpeg)
+![Ürün Görsel 2](Sprint2_Screenshots/ÜrünGörsel-2.jpeg)
+![Ürün Görsel 3](Sprint2_Screenshots/ÜrünGörsel-3.jpeg)
+![Ürün Görsel 4](Sprint2_Screenshots/ÜrünGörsel-4.jpeg)
+![Ürün Görsel 5](Sprint2_Screenshots/ÜrünGörsel-5.jpeg)
+![Ürün Görsel 6](Sprint2_Screenshots/ÜrünGörsel-6.jpeg)
+
+
+**Sprint Review**
+
+Sprint 2'de ekip, projenin çekirdek otomasyon altyapısını gerçek servislerle kurmuştur. Make üzerinde üç ayrı akış (yanıt sınıflandırma, e-posta gönderim, sözleşme taslağı) canlıya alınmış ve gerçek çalıştırmalarla test edilmiştir. Supabase ile hafıza yapısı entegre edilmiş, Cal.com entegrasyonu planlanandan önce tamamlanmıştır. Apollo, Firecrawl ve Tavily araçları ücretsiz katmanda denenmiş ve çalıştıkları görülmüş, ancak nihai araç seçimi bilinçli olarak Sprint 3'e bırakılmıştır. Bul→Araştır→Skorla→Yaz zincirinin geri kalanı (Apollo tam entegrasyonu, Claude ICP skorlama, Claude mesaj üretimi) Sprint 3'e devretmiştir.
+
+Sprint Review katılımcıları: Zeynep İbiş, Rumeysa Songür, Furkan Çeşitler, Taha Demirkan, Zehra Nur Gölünç.
+
+
+**Sprint Retrospective**
+
+- Apollo, Firecrawl ve Tavily'nin üçü de ücretsiz katmanda denenmiş, üçünün de teknik olarak çalıştığı görülmüştür; ancak hangisinin/hangilerinin nihai üründe kullanılacağına dair karar, maliyet ve veri kalitesi karşılaştırması yapılabilmesi için Sprint 3'e bırakılmıştır.
+- Make üzerinde kurulan otomasyonların (yanıt sınıflandırma, e-posta gönderim, sözleşme taslağı) beklenenden erken ve sorunsuz çalışması, ekibin Sprint 3'te asıl zamanını Bul→Araştır→Skorla→Yaz zincirine ayırabilmesini sağlamıştır.
+- Cal.com entegrasyonunun planlanandan (Sprint 3) önce, Sprint 2'de tamamlanması olumlu bir sapma olarak değerlendirilmiş ve Sprint 3 backlog'undan çıkarılmıştır.
+- Supabase hafıza yapısının kapsamı, çoklu firma yönetimi yerine MVP'nin (tek firma, uçtan uca zincir) ihtiyacına göre daraltılmıştır; tam kapasiteli yapı Sprint 3'te, ölçeklenme aşamasında ele alınacaktır.
+- Next.js panel arayüzünün hâlâ mock veriyle çalıştığı ve gerçek Supabase verisine henüz bağlanmadığı ekip tarafından not edilmiştir; bu bağlantının Sprint 3'te kurulmasına karar verilmiştir.
+- Sprint 3'ün öncelik sırası şu şekilde belirlenmiştir: (1) Apollo'nun nihai entegrasyonu, (2) Claude API ile ICP skorlama, (3) Claude API ile kişiselleştirilmiş mesaj üretimi, (4) tek gerçek firma ile uçtan uca test, (5) panel arayüzünün gerçek veriyle bağlanması, (6) deploy, sunum ve tanıtım videosu hazırlığı.
+- Ekip içi iletişimin, Sprint 2'de olduğu gibi WhatsApp check-in'leri ve düzenli Meet toplantılarıyla (12 ve 18 Temmuz'da olduğu gibi) sürdürülmesine karar verilmiştir.
 
 \---
 
