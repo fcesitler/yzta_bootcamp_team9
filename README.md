@@ -211,21 +211,12 @@ Sprint 2 hedefi 140 puan olarak belirlenmiştir. Sprint 1'in aksine bu sprintte 
 Sprint ortasında ekip, backlog'a **Pazar Araştırması** (ICP netleştirme, rakip analizi, fiyatlandırma/pazar büyüklüğü, pilot firma adayları) maddesini +10 puanla eklemiştir; bu ekleme, Supabase kartının kapsamının MVP'ye göre daraltılmasıyla dengelenmiş, toplam 140 puan sabit tutulmuştur.
 
 
-<<<<<<< HEAD
-**## Ürün Geliştirme Listesi URL'si**
-=======
 *## Ürün Geliştirme Listesi URL'si**
->>>>>>> dbc94497f39ed6d5c18f31de52ea909f559e6ad1
-
 
 [Trello Panosu](https://trello.com/b/mn6hZJ0Y/ai-sdr-hallederiz-team-9-sprint-2)
 
 
-<<<<<<< HEAD
-=======
 
-
->>>>>>> dbc94497f39ed6d5c18f31de52ea909f559e6ad1
 **Daily Scrum Notları**
 
 Ekip, Sprint 2 boyunca WhatsApp üzerinden düzenli check-in'ler yapmaya devam etmiştir. Ayrıca 12 Temmuz ve 18 Temmuz tarihlerinde Google Meet üzerinden iki ayrı toplantı gerçekleştirilmiş; bu toplantılarda entegrasyon durumları, karşılaşılan teknik engeller ve kalan işler ekip olarak birlikte gözden geçirilmiştir.
@@ -274,7 +265,7 @@ Supabase hafıza yapısı MCP bağlantısı üzerinden Make akışlarına entegr
 
 **Sprint Review**
 
-Sprint 2'de ekip, projenin çekirdek otomasyon altyapısını gerçek servislerle kurmuştur. Make üzerinde üç ayrı akış (yanıt sınıflandırma, e-posta gönderim, sözleşme taslağı) canlıya alınmış ve gerçek çalıştırmalarla test edilmiştir. Supabase ile hafıza yapısı entegre edilmiş, Cal.com entegrasyonu planlanandan önce tamamlanmıştır. Apollo, Firecrawl ve Tavily araçları ücretsiz katmanda denenmiş ve çalıştıkları görülmüş, ancak nihai araç seçimi bilinçli olarak Sprint 3'e bırakılmıştır. Bul→Araştır→Skorla→Yaz zincirinin geri kalanı (Apollo tam entegrasyonu, Claude ICP skorlama, Claude mesaj üretimi) Sprint 3'e devretmiştir.
+Sprint 2'de ekip, projenin çekirdek otomasyon altyapısını gerçek servislerle kurmuştur. Make üzerinde üç ayrı akış (yanıt sınıflandırma, e-posta gönderim, sözleşme taslağı) canlıya alınmış ve gerçek çalıştırmalarla test edilmiştir. Supabase ile hafıza yapısı entegre edilmiş, Cal.com entegrasyonu planlanandan önce tamamlanmıştır.Apollo entegrasyonu ücretsiz katmanda gerçek veri çekerek çalışmış ve pipeline'a bağlanmıştır; Claude ile kişiselleştirilmiş mesaj üretimi ve tek gerçek firma üzerinden uçtan uca test (lead→konuşma→sözleşme) doğrulanmıştır. Firecrawl ve Tavily de test edilmiş, çalıştıkları görülmüş, ancak nihai araç seçimi Sprint 3'e bırakılmıştır.
 
 Sprint Review katılımcıları: Zeynep İbiş, Rumeysa Songür, Furkan Çeşitler, Taha Demirkan, Zehra Nur Gölünç.
 
@@ -282,11 +273,11 @@ Sprint Review katılımcıları: Zeynep İbiş, Rumeysa Songür, Furkan Çeşitl
 **Sprint Retrospective**
 
 - Apollo, Firecrawl ve Tavily'nin üçü de ücretsiz katmanda denenmiş, üçünün de teknik olarak çalıştığı görülmüştür; ancak hangisinin/hangilerinin nihai üründe kullanılacağına dair karar, maliyet ve veri kalitesi karşılaştırması yapılabilmesi için Sprint 3'e bırakılmıştır.
-- Make üzerinde kurulan otomasyonların (yanıt sınıflandırma, e-posta gönderim, sözleşme taslağı) beklenenden erken ve sorunsuz çalışması, ekibin Sprint 3'te asıl zamanını Bul→Araştır→Skorla→Yaz zincirine ayırabilmesini sağlamıştır.
+- Make üzerinde kurulan otomasyonların (yanıt sınıflandırma, e-posta gönderim, sözleşme taslağı) beklenenden erken ve sorunsuz çalışması olumlu bir gelişme olmuştur.
 - Cal.com entegrasyonunun planlanandan (Sprint 3) önce, Sprint 2'de tamamlanması olumlu bir sapma olarak değerlendirilmiş ve Sprint 3 backlog'undan çıkarılmıştır.
 - Supabase hafıza yapısının kapsamı, çoklu firma yönetimi yerine MVP'nin (tek firma, uçtan uca zincir) ihtiyacına göre daraltılmıştır; tam kapasiteli yapı Sprint 3'te, ölçeklenme aşamasında ele alınacaktır.
 - Next.js panel arayüzünün hâlâ mock veriyle çalıştığı ve gerçek Supabase verisine henüz bağlanmadığı ekip tarafından not edilmiştir; bu bağlantının Sprint 3'te kurulmasına karar verilmiştir.
-- Sprint 3'ün öncelik sırası şu şekilde belirlenmiştir: (1) Apollo'nun nihai entegrasyonu, (2) Claude API ile ICP skorlama, (3) Claude API ile kişiselleştirilmiş mesaj üretimi, (4) tek gerçek firma ile uçtan uca test, (5) panel arayüzünün gerçek veriyle bağlanması, (6) deploy, sunum ve tanıtım videosu hazırlığı.
+- Sprint 3 öncelik listesi ise: (1) Claude API ile ICP skorlama, (2) çoklu firma desteği (batch işleme), (3) panel arayüzünün gerçek veriyle bağlanması, (4) deploy, sunum ve tanıtım videosu hazırlığı.
 - Ekip içi iletişimin, Sprint 2'de olduğu gibi WhatsApp check-in'leri ve düzenli Meet toplantılarıyla (12 ve 18 Temmuz'da olduğu gibi) sürdürülmesine karar verilmiştir.
 
 \---
