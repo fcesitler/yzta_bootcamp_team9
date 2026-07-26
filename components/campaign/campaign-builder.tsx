@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { ChevronDown, Check, Sparkles, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -10,6 +10,7 @@ import {
   matchingUniverse,
   dailyPull,
 } from "@/lib/mock";
+import { saveCampaign } from "@/app/(app)/campaign/actions";
 
 function InlineSelect({
   value,
@@ -47,14 +48,27 @@ export function CampaignBuilder() {
   const [geo, setGeo] = useState(campaignOptions.geo[0]);
   const [role, setRole] = useState(campaignOptions.role[0]);
   const [signals, setSignals] = useState<string[]>(defaultSignals);
-  const [saved, setSaved] = useState(false);
+  const [maxLeads, setMaxLeads] = useState(10);
+  const [error, setError] = useState("");
+  const [isPending, startTransition] = useTransition();
 
-  const toggleSignal = (s: string) => {
-    setSaved(false);
+  const toggleSignal = (s: string) =>
     setSignals((prev) =>
       prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
     );
-  };
+
+  function handleSave() {
+    setError("");
+    startTransition(async () => {
+      const result = await saveCampaign({
+        name: `${industry} · ${geo}`,
+        icp: { sector: industry, size, geography: geo, role },
+        signals,
+        maxLeads,
+      });
+      if (result?.error) setError(result.error);
+    });
+  }
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -76,54 +90,57 @@ export function CampaignBuilder() {
             label="Sektör"
             value={industry}
             options={campaignOptions.industry}
-            onChange={(v) => {
-              setSaved(false);
-              setIndustry(v);
-            }}
+            onChange={(v) => setIndustry(v)}
           />{" "}
           alanında,{" "}
           <InlineSelect
             label="Çalışan sayısı"
             value={size}
             options={campaignOptions.size}
-            onChange={(v) => {
-              setSaved(false);
-              setSize(v);
-            }}
+            onChange={(v) => setSize(v)}
           />{" "}
           çalışanlı,{" "}
           <InlineSelect
             label="Bölge"
             value={geo}
             options={campaignOptions.geo}
-            onChange={(v) => {
-              setSaved(false);
-              setGeo(v);
-            }}
+            onChange={(v) => setGeo(v)}
           />{" "}
           merkezli şirketlerdeki{" "}
           <InlineSelect
             label="Rol"
             value={role}
             options={campaignOptions.role}
-            onChange={(v) => {
-              setSaved(false);
-              setRole(v);
-            }}
+            onChange={(v) => setRole(v)}
           />{" "}
           bul.
         </p>
 
-        <div className="mt-5 flex items-start gap-2 rounded-[10px] bg-lime-50 px-4 py-3">
-          <Sparkles className="mt-0.5 size-4 shrink-0 text-forest-700" />
-          <p className="text-[13px] leading-relaxed text-forest-800">
-            Eşleşen evren:{" "}
-            <span className="font-medium">
-              {matchingUniverse.toLocaleString("tr-TR")}
-            </span>{" "}
-            şirket Apollo&apos;da · Bul ajanı günde en iyi{" "}
-            <span className="font-medium">{dailyPull}</span> tanesini çeker.
-          </p>
+        <div className="mt-5 flex items-center justify-between gap-4 rounded-[10px] bg-lime-50 px-4 py-3">
+          <div className="flex items-start gap-2">
+            <Sparkles className="mt-0.5 size-4 shrink-0 text-forest-700" />
+            <p className="text-[13px] leading-relaxed text-forest-800">
+              Eşleşen evren:{" "}
+              <span className="font-medium">
+                {matchingUniverse.toLocaleString("tr-TR")}
+              </span>{" "}
+              şirket · Bul ajanı bu kampanyada{" "}
+              <span className="font-medium">{maxLeads}</span> lead çeker.
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <label className="text-[12px] font-medium text-forest-700 whitespace-nowrap">
+              Lead sayısı
+            </label>
+            <input
+              type="number"
+              min={1}
+              step={5}
+              value={maxLeads}
+              onChange={(e) => setMaxLeads(Math.min(100, Math.max(1, Number(e.target.value))))}
+              className="w-20 rounded-md border border-forest-200 bg-white px-2 py-1 text-[13px] font-medium text-forest-800 focus:border-forest-400 focus:outline-none"
+            />
+          </div>
         </div>
       </section>
 
@@ -159,17 +176,15 @@ export function CampaignBuilder() {
       <div className="mt-6 flex items-center gap-4">
         <button
           type="button"
-          onClick={() => setSaved(true)}
-          className="inline-flex items-center gap-2 rounded-[10px] bg-forest-800 px-5 py-2.5 text-[14px] font-medium text-paper transition-colors hover:bg-forest-700"
+          onClick={handleSave}
+          disabled={isPending}
+          className="inline-flex items-center gap-2 rounded-[10px] bg-forest-800 px-5 py-2.5 text-[14px] font-medium text-paper transition-colors hover:bg-forest-700 disabled:opacity-60"
         >
           <Play className="size-4" strokeWidth={2.4} />
-          Kaydet &amp; kampanyayı başlat
+          {isPending ? "Kaydediliyor…" : "Kaydet & kampanyayı başlat"}
         </button>
-        {saved && (
-          <p className="text-[13px] font-medium text-positive">
-            Kampanya kaydedildi — Bul ajanı {signals.length} sinyalle çalışmaya
-            başladı.
-          </p>
+        {error && (
+          <p className="text-[13px] font-medium text-danger">{error}</p>
         )}
       </div>
     </div>

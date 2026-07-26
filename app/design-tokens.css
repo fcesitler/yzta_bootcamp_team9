@@ -44,10 +44,15 @@
   --danger:     #BE123C;  /* itiraz / hata */
   --danger-bg:  #FFE4E6;
 
+  /* Shadow skalası — Donezo-inspired derinlik */
+  --shadow-sm:   0 1px 2px 0 rgba(15,23,42,0.05);
+  --shadow-card: 0 1px 3px 0 rgba(15,23,42,0.07), 0 1px 2px -1px rgba(15,23,42,0.05);
+  --shadow-md:   0 4px 8px -2px rgba(15,23,42,0.09), 0 2px 4px -2px rgba(15,23,42,0.05);
+
   /* Purpose eşlemeleri (bileşenlerin okuyacağı katman) */
   --brand:            var(--forest-800);
   --brand-hover:      var(--forest-700);
-  --brand-contrast:   var(--paper);      /* forest üstündeki metin */
+  --brand-contrast:   var(--paper);
   --accent:           var(--lime-500);
   --accent-soft:      var(--lime-100);
   --nav-active-bg:    var(--forest-50);

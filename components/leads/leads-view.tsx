@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import {
-  leads as seedLeads,
   leadTabs,
   stageMeta,
   type Lead,
@@ -23,33 +22,36 @@ const stageToneClass: Record<string, string> = {
   default: "bg-surface-2 text-text-muted",
   positive: "bg-positive-bg text-positive",
   accent: "bg-lime-100 text-forest-800",
+  danger: "bg-danger-bg text-danger",
 };
 
-export function LeadsView() {
-  const [leads, setLeads] = useState<Lead[]>(seedLeads);
+export function LeadsView({ initialLeads = [] }: { initialLeads?: Lead[] }) {
+  const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [tab, setTab] = useState<"all" | Stage>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // "Tümü" düşük ICP'li lead'leri GÖSTERMEZ — bunlar kendi "Düşük ICP" sekmesinde
+  // kalır, kullanıcının varsayılan görünümünü kaliteli lead'lerle temiz tutar.
   const filtered =
-    tab === "all" ? leads : leads.filter((l) => l.stage === tab);
+    tab === "all"
+      ? leads.filter((l) => l.stage !== "low_score")
+      : leads.filter((l) => l.stage === tab);
 
   const selected = leads.find((l) => l.id === selectedId) ?? null;
 
   const count = (key: "all" | Stage) =>
-    key === "all" ? leads.length : leads.filter((l) => l.stage === key).length;
+    key === "all"
+      ? leads.filter((l) => l.stage !== "low_score").length
+      : leads.filter((l) => l.stage === key).length;
 
   const handleStageChange = (id: string, stage: Stage) => {
     setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, stage } : l)));
   };
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <h1 className="text-[28px] font-medium leading-tight tracking-tight text-text-strong">
-        Leads
-      </h1>
-
+    <div>
       {/* Filtre sekmeleri */}
-      <div className="mt-6 flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1.5">
         {leadTabs.map((t) => {
           const active = tab === t.key;
           return (
@@ -78,7 +80,7 @@ export function LeadsView() {
       </div>
 
       {/* Tablo */}
-      <div className="mt-5 overflow-hidden rounded-card border border-hair bg-surface">
+      <div className="mt-5 overflow-hidden rounded-card border border-hair bg-surface shadow-card">
         <div className="grid grid-cols-[1.4fr_1.2fr_auto] gap-4 border-b border-hair px-5 py-3 text-[11px] font-medium uppercase tracking-wide text-text-faint">
           <span>Şirket</span>
           <span>Kişi</span>
@@ -91,7 +93,7 @@ export function LeadsView() {
           </p>
         ) : (
           filtered.map((lead) => {
-            const meta = stageMeta[lead.stage];
+            const meta = stageMeta[lead.stage] ?? { label: lead.stage, tone: "default" as const };
             return (
               <button
                 key={lead.id}
@@ -127,10 +129,11 @@ export function LeadsView() {
                 <div className="justify-self-end">
                   <span
                     className={cn(
-                      "inline-block rounded-full px-2.5 py-1 text-[12px] font-medium",
+                      "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium",
                       stageToneClass[meta.tone]
                     )}
                   >
+                    <span className="size-1.5 rounded-full bg-current opacity-70" />
                     {meta.label}
                   </span>
                 </div>

@@ -2,7 +2,7 @@
 
 export type NavKey =
   | "dashboard"
-  | "leads"
+  | "campaigns"
   | "conversations"
   | "briefs"
   | "close"
@@ -20,7 +20,7 @@ export type NavItem = {
 
 export const navItems: NavItem[] = [
   { key: "dashboard", label: "Dashboard", href: "/", icon: "LayoutGrid" },
-  { key: "leads", label: "Leads", href: "/leads", icon: "List", badge: "3" },
+  { key: "campaigns", label: "Campaigns", href: "/campaigns", icon: "History" },
   { key: "conversations", label: "Conversations", href: "/conversations", icon: "Inbox" },
   { key: "briefs", label: "Meeting briefs", href: "/briefs", icon: "FileText" },
   {
@@ -108,9 +108,11 @@ export type Stage =
   | "sent"
   | "replied"
   | "meeting_booked"
-  | "won";
+  | "won"
+  | "lost"
+  | "low_score";
 
-export type StageTone = "warning" | "default" | "positive" | "accent";
+export type StageTone = "warning" | "default" | "positive" | "accent" | "danger";
 
 export const stageMeta: Record<Stage, { label: string; tone: StageTone }> = {
   awaiting_approval: { label: "Onay bekliyor", tone: "warning" },
@@ -118,6 +120,8 @@ export const stageMeta: Record<Stage, { label: string; tone: StageTone }> = {
   replied: { label: "Yanıtladı", tone: "positive" },
   meeting_booked: { label: "Toplantı ayarlandı", tone: "accent" },
   won: { label: "Kazanıldı", tone: "positive" },
+  lost: { label: "Kaybedildi", tone: "danger" },
+  low_score: { label: "Düşük ICP", tone: "default" },
 };
 
 export type LeadTint = "lime" | "sage" | "amber" | "pink";
@@ -323,6 +327,7 @@ export const leadTabs: { key: "all" | Stage; label: string }[] = [
   { key: "replied", label: "Yanıtladı" },
   { key: "meeting_booked", label: "Toplantı" },
   { key: "won", label: "Kazanıldı" },
+  { key: "low_score", label: "Düşük ICP" },
 ];
 
 // --- Close & Contract (A7) ---
@@ -439,7 +444,7 @@ export const meetings: Meeting[] = [
 
 export const leadById = (id: string) => leads.find((l) => l.id === id)!;
 
-export type Classification = "interested" | "objection" | "not_now";
+export type Classification = "interested" | "objection" | "not_now" | "irrelevant";
 
 export const classificationMeta: Record<
   Classification,
@@ -448,6 +453,7 @@ export const classificationMeta: Record<
   interested: { label: "İlgili", tone: "positive" },
   objection: { label: "İtiraz", tone: "warning" },
   not_now: { label: "Şimdi değil", tone: "default" },
+  irrelevant: { label: "İlgisiz", tone: "default" },
 };
 
 export type ThreadMessage = {

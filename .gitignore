@@ -42,3 +42,4 @@ next-env.d.ts
 
 # Yerel dev (makineye özel)
 .claude/
+.trigger/
