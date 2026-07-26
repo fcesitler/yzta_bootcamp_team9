@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
-import { X, Sparkles, Check, Pencil } from "lucide-react";
+import { useEffect, useState, useTransition } from "react";
+import { X, Sparkles, Check, Pencil, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Lead, type Stage, stageMeta } from "@/lib/mock";
+import { approveLead } from "@/app/(app)/campaigns/actions";
 
 const tintClass: Record<string, string> = {
   lime: "bg-lime-100 text-forest-800",
@@ -31,13 +32,39 @@ export function LeadDrawer({
   onClose: () => void;
   onStageChange: (id: string, stage: Stage) => void;
 }) {
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [editBody, setEditBody] = useState("");
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // Lead değişince hata mesajını ve edit modunu sıfırla
+  useEffect(() => {
+    setError("");
+    setIsEditing(false);
+    setEditBody(lead?.draftBody ?? "");
+  }, [lead?.id, lead?.draftBody]);
+
   const open = lead !== null;
+
+  function handleApprove() {
+    if (!lead) return;
+    setError("");
+    startTransition(async () => {
+      const result = await approveLead(lead.id, editBody || undefined);
+      if (result?.error) {
+        setError(result.error);
+      } else {
+        onStageChange(lead.id, "sent");
+        onClose();
+      }
+    });
+  }
 
   return (
     <>
@@ -126,9 +153,19 @@ export function LeadDrawer({
                   <p className="text-[13px] font-medium text-text-strong">
                     {lead.draftSubject}
                   </p>
-                  <p className="mt-2 whitespace-pre-line text-[13px] leading-relaxed text-text">
-                    {lead.draftBody}
-                  </p>
+                  {isEditing ? (
+                    <textarea
+                      value={editBody}
+                      onChange={(e) => setEditBody(e.target.value)}
+                      rows={8}
+                      className="mt-2 w-full resize-none bg-transparent text-[13px] leading-relaxed text-text outline-none"
+                      autoFocus
+                    />
+                  ) : (
+                    <p className="mt-2 whitespace-pre-line text-[13px] leading-relaxed text-text">
+                      {editBody || lead.draftBody}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -155,14 +192,32 @@ export function LeadDrawer({
                   );
                 })}
               </div>
+              {error && (
+                <p className="mb-2 text-[12px] font-medium text-danger">{error}</p>
+              )}
               <div className="flex gap-2">
-                <button className="inline-flex flex-1 items-center justify-center gap-2 rounded-[10px] bg-forest-800 px-4 py-2.5 text-[14px] font-medium text-paper transition-colors hover:bg-forest-700">
-                  <Check className="size-4" strokeWidth={2.4} />
-                  Onayla &amp; gönder
+                <button
+                  onClick={handleApprove}
+                  disabled={isPending || lead.stage === "sent"}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-[10px] bg-forest-800 px-4 py-2.5 text-[14px] font-medium text-paper transition-colors hover:bg-forest-700 disabled:opacity-60"
+                >
+                  {isPending ? (
+                    <Loader2 className="size-4 animate-spin" strokeWidth={2.4} />
+                  ) : (
+                    <Check className="size-4" strokeWidth={2.4} />
+                  )}
+                  {lead.stage === "sent"
+                    ? "Gönderildi"
+                    : isPending
+                      ? "Gönderiliyor…"
+                      : "Onayla & gönder"}
                 </button>
-                <button className="inline-flex items-center justify-center gap-2 rounded-[10px] border border-hair px-4 py-2.5 text-[14px] font-medium text-text transition-colors hover:bg-surface-2">
+                <button
+                  onClick={() => setIsEditing((v) => !v)}
+                  className="inline-flex items-center justify-center gap-2 rounded-[10px] border border-hair px-4 py-2.5 text-[14px] font-medium text-text transition-colors hover:bg-surface-2"
+                >
                   <Pencil className="size-4" />
-                  Düzenle
+                  {isEditing ? "Tamam" : "Düzenle"}
                 </button>
               </div>
             </div>

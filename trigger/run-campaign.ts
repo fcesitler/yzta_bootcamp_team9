@@ -1,0 +1,1337 @@
+import { task, logger } from "@trigger.dev/sdk/v3";
+import Anthropic from "@anthropic-ai/sdk";
+import { Firecrawl } from "@mendable/firecrawl-js";
+import { createClient } from "@supabase/supabase-js";
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+const firecrawl = new Firecrawl({ apiKey: process.env.FIRECRAWL_API_KEY! });
+
+function getDb() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
+type Campaign = {
+  id: string;
+  owner_id: string;
+  name: string;
+  icp: Record<string, string> | string | null;
+  signals: string[] | string | null;
+};
+
+function icpToText(icp: Campaign["icp"]): string {
+  if (!icp) return "dijital ajans CEO'su, Türkiye";
+  if (typeof icp === "string") return icp;
+  return Object.entries(icp)
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join(", ");
+}
+
+function signalsToText(signals: Campaign["signals"]): string | null {
+  if (!signals) return null;
+  if (typeof signals === "string") return signals;
+  return signals.join(", ");
+}
+
+type Contact = {
+  name: string;
+  first_name: string;
+  last_name: string;
+  title: string | null;
+  email: string | null;
+  linkedin_url: string | null;
+  organization: {
+    name: string;
+    website_url: string | null;
+    industry: string | null;
+    estimated_num_employees: number | null;
+    city: string | null;
+    country: string | null;
+  } | null;
+};
+
+type ResearchResult = {
+  industry: string;
+  size: string;
+  location: string;
+  whyNow: string;
+  websiteSummary: string;
+  newsSummary: string;
+};
+
+async function log(
+  db: ReturnType<typeof getDb>,
+  campaignId: string,
+  leadId: string | null,
+  ownerId: string,
+  step: string,
+  status: string,
+  summary: string
+) {
+  try {
+    await db.from("agent_activity").insert({
+      campaign_id: campaignId,
+      lead_id: leadId,
+      owner_id: ownerId,
+      step,
+      status,
+      summary,
+    });
+  } catch (e) {
+    logger.warn("logActivity failed", { error: e });
+  }
+}
+
+// ============================================================
+// APOLLO (birincil lead kaynağı)
+// ============================================================
+// Kredi modeli: search = 0 kredi (email maskeli döner),
+// bulk_match = lead başına 1 kredi (yalnız email; telefon 8 kredi → KAPALI TUTULMALI).
+// Bu yüzden akış: ara (bedava) → ön-skorla → yalnız en iyileri enrich et.
+
+const APOLLO_BASE = "https://api.apollo.io/api/v1";
+// mixed_people/search API çağrıları için DEPRECATED (422 döner) — api_search kullanılmalı.
+// 2026-07-17 canlı testte doğrulandı.
+const APOLLO_SEARCH_PATH = process.env.APOLLO_SEARCH_PATH || "mixed_people/api_search";
+
+// Aday havuzu = hedef lead sayısının bu katı (search bedava olduğu için geniş tutuyoruz)
+const CANDIDATE_MULTIPLIER = 4;
+// Aynı anda kaç lead işlensin (Research+Score+Write) — timeout'u önler
+const PIPELINE_CONCURRENCY = 10;
+// Apollo bulk_match tek istekte en fazla 10 kayıt kabul eder
+const APOLLO_MATCH_CHUNK = 10;
+
+type ApolloParams = {
+  person_titles: string[];
+  person_seniorities: string[];
+  person_locations: string[];
+  organization_locations: string[];
+  q_organization_keyword_tags: string[];
+  organization_num_employees_ranges: string[];
+  // Satın-alma sinyali filtreleri (opsiyonel) — arama bedava olduğu için
+  // bunları uygulamak kredi maliyeti YOK, sadece havuz kalitesini yükseltir.
+  person_not_titles?: string[];
+  organization_num_jobs_range?: { min: number; max: number };
+  organization_latest_funding_stage_cd?: string[];
+  q_organization_job_titles?: string[];
+  currently_using_any_of_technology_uids?: string[];
+  organization_headcount_growth_6m_ranges?: string[];
+  person_has_changed_jobs_in_last_n_months?: number;
+  person_in_current_title_for_months_max?: number;
+  contact_phone_types?: string[];
+};
+
+// Türkçe metni ASCII küçük harfe indirger — kalıp eşleştirme için.
+// İki tuzak var:
+//   1) "İ".toLowerCase() araya birleşik nokta (U+0307) koyar → "işe" kalıbı tutmaz
+//   2) "ı" (noktasız i, U+0131) ayrı bir harftir, NFD onu ÇÖZMEZ → "yatırım" ≠ "yatirim"
+// Bu ikisi elle çevrilir; ş/ğ/ü/ö/ç zaten NFD ile ayrışıp aksanı atılır.
+function toAsciiLower(input: string): string {
+  return input
+    .replace(/İ/g, "I")
+    .replace(/ı/g, "i")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+}
+
+// ── Önceden belirlenmiş (kürate) Apollo filtreleri ─────────────────────────
+// Her sinyal çipi, KANITLANMIŞ Apollo arama parametrelerine BİREBİR eşlenir.
+// Eski yaklaşımın (serbest metni regex'le tahmin) yerini alır: UI'daki 8 çipin
+// çoğu regex'e takılmıyor, sessizce no-op oluyordu (ör. "Ajans sözleşmesi bitiyor",
+// "Liderlik değişikliği" hiçbir filtreye dönüşmüyordu). Arama 0 kredi olduğu için
+// bu filtreler bedava hassasiyet — yalnız havuz kalitesini yükseltir, maliyet yok.
+// 2026-07-17 canlı testte parametrelerin gerçekten uygulandığı doğrulandı
+// (uydurma parametreler Apollo tarafında sessizce yok sayılır).
+const SIGNAL_APOLLO_PRESETS: Record<string, Partial<ApolloParams>> = {
+  "Yatırım turu açıklandı": {
+    organization_latest_funding_stage_cd: ["seed", "series_a", "series_b"],
+  },
+  "İşe alım artışı (growth rolleri)": {
+    organization_num_jobs_range: { min: 1, max: 100 },
+    organization_headcount_growth_6m_ranges: ["2,5", "5,10", "10,25", "25,100"],
+    q_organization_job_titles: [
+      "sales development representative",
+      "account executive",
+      "marketing manager",
+    ],
+  },
+  "Ürün lansmanı yaklaşıyor": {
+    organization_num_jobs_range: { min: 1, max: 100 },
+    q_organization_job_titles: ["product manager", "product marketing manager"],
+  },
+  "Pazar genişlemesi": {
+    organization_headcount_growth_6m_ranges: ["5,10", "10,25", "25,100"],
+  },
+  "Liderlik değişikliği": {
+    person_has_changed_jobs_in_last_n_months: 3,
+    person_in_current_title_for_months_max: 12,
+  },
+  "Ajans sözleşmesi bitiyor": {
+    // Doğrudan Apollo karşılığı yok; pazarlama ekibi kuran firmalar en yakın proxy.
+    q_organization_job_titles: ["marketing manager", "head of marketing"],
+  },
+  // Aşağıdaki iki sinyalin Apollo ARAMASINDA karşılığı yok — haber/araştırma
+  // aşamasında (Tavily + scoreContact) değerlendirilir, arama filtresi değildirler.
+  "Basında görünürlük artışı": {},
+  "Yeniden markalaşma / birleşme": {},
+};
+
+// Bilinmeyen/eski serbest-metin sinyaller için geriye dönük regex eşlemesi.
+// (Önceden belirlenmiş çip etiketleriyle eşleşmeyen kayıtlar buraya düşer.)
+function legacyRegexFilters(signal: string): Partial<ApolloParams> {
+  const f: Partial<ApolloParams> = {};
+  const s = toAsciiLower(signal);
+  if (/ise alim|hiring|buyume|growth|ekip/.test(s)) {
+    f.organization_num_jobs_range = { min: 1, max: 100 };
+  }
+  if (/satis|sales|pazarlama|marketing|sdr/.test(s)) {
+    f.q_organization_job_titles = [
+      "sales development representative",
+      "account executive",
+      "marketing manager",
+    ];
+  }
+  if (/buyume|growth|hizla|scale|scaling|ekip/.test(s)) {
+    f.organization_headcount_growth_6m_ranges = ["2,5", "5,10", "10,25", "25,100"];
+  }
+  if (/is degistir|job change|yeni rol|new role|yeni goreve/.test(s)) {
+    f.person_has_changed_jobs_in_last_n_months = 3;
+  }
+  if (/yeni basla|recently started|yeni atanan|just joined|ilk yil/.test(s)) {
+    f.person_in_current_title_for_months_max = 12;
+  }
+  if (/finansman|yatirim|funding|fon|invest/.test(s)) {
+    f.organization_latest_funding_stage_cd = ["seed", "series_a", "series_b"];
+  }
+  if (/telefon|phone|mobil|mobile/.test(s)) {
+    f.contact_phone_types = ["mobile"];
+  }
+  return f;
+}
+
+// Birden çok sinyalin filtrelerini birleştir + her aramada geçerli taban filtre.
+// Diziler birleştirilip tekilleştirilir; sayısal aralıklar en geniş/gevşek alınır
+// (aşırı daralmayı önlemek için — funding testinde havuz -%98 daralmıştı).
+function mergeApolloFilters(parts: Partial<ApolloParams>[]): Partial<ApolloParams> {
+  const out: Partial<ApolloParams> = {
+    // Taban hassasiyet: karar verici olmayanları (stajyer/asistan) her zaman ele.
+    person_not_titles: ["intern", "assistant", "student", "trainee"],
+  };
+  const jobTitles = new Set<string>();
+  const headcount = new Set<string>();
+  const fundingStages = new Set<string>();
+
+  for (const p of parts) {
+    p.q_organization_job_titles?.forEach((t) => jobTitles.add(t));
+    p.organization_headcount_growth_6m_ranges?.forEach((r) => headcount.add(r));
+    p.organization_latest_funding_stage_cd?.forEach((r) => fundingStages.add(r));
+    if (p.organization_num_jobs_range) {
+      out.organization_num_jobs_range = out.organization_num_jobs_range
+        ? {
+            min: Math.min(out.organization_num_jobs_range.min, p.organization_num_jobs_range.min),
+            max: Math.max(out.organization_num_jobs_range.max, p.organization_num_jobs_range.max),
+          }
+        : p.organization_num_jobs_range;
+    }
+    if (p.person_has_changed_jobs_in_last_n_months != null) {
+      out.person_has_changed_jobs_in_last_n_months = Math.max(
+        out.person_has_changed_jobs_in_last_n_months ?? 0,
+        p.person_has_changed_jobs_in_last_n_months
+      );
+    }
+    if (p.person_in_current_title_for_months_max != null) {
+      out.person_in_current_title_for_months_max = Math.max(
+        out.person_in_current_title_for_months_max ?? 0,
+        p.person_in_current_title_for_months_max
+      );
+    }
+    if (p.contact_phone_types?.length) out.contact_phone_types = p.contact_phone_types;
+  }
+
+  if (jobTitles.size) out.q_organization_job_titles = Array.from(jobTitles);
+  if (headcount.size) out.organization_headcount_growth_6m_ranges = Array.from(headcount);
+  if (fundingStages.size) out.organization_latest_funding_stage_cd = Array.from(fundingStages);
+  return out;
+}
+
+// Kampanyanın "signals" alanını (çip etiketleri) önceden belirlenmiş Apollo
+// filtrelerine çevirir. Bilinen çipler kürate preset'e, bilinmeyenler regex'e düşer.
+function signalsToApolloFilters(signals: Campaign["signals"]): Partial<ApolloParams> {
+  const labels: string[] = Array.isArray(signals)
+    ? signals
+    : typeof signals === "string" && signals
+      ? signals.split(",").map((s) => s.trim()).filter(Boolean)
+      : [];
+
+  const parts = labels.map((label) => {
+    const preset = SIGNAL_APOLLO_PRESETS[label];
+    return preset ?? legacyRegexFilters(label);
+  });
+  return mergeApolloFilters(parts);
+}
+
+// Apollo search sonucu — KASITLI OLARAK ÇOK SINIRLI.
+// api_search yalnızca şunları döndürür: id, first_name, title, organization.name
+// ve has_* boolean bayrakları. Soyad maskeli (last_name_obfuscated), linkedin_url yok,
+// firma sektörü/çalışan sayısı/ülkesi yok — hepsi ancak enrichment'ta geliyor.
+type ApolloCandidate = {
+  apollo_id: string;
+  first_name: string;
+  title: string | null;
+  organization_name: string;
+  has_email: boolean;
+};
+
+type ApifyParams = {
+  personTitle: string[];
+  seniority: string[];
+  personCountry: string[];
+  companyCountry: string[];
+  industry: string[];
+  industryKeywords: string[];
+  companyEmployeeSize: string[];
+};
+
+const defaultApifyParams: ApifyParams = {
+  personTitle: ["CEO", "Founder"],
+  seniority: ["Founder", "CEO", "CXO"],
+  personCountry: ["Turkey"],
+  companyCountry: ["Turkey"],
+  industry: [],
+  industryKeywords: [],
+  companyEmployeeSize: ["11 - 50", "51 - 200"],
+};
+
+// ICP sector → Apify enum-geçerli industry adları (Claude'a bırakılmaz — enum kısıtlı)
+function sectorToIndustries(sector: string | null | undefined): string[] {
+  if (!sector) return [];
+  const s = sector.toLowerCase();
+  if (s.includes("fintech") || s.includes("e-ticaret") || s.includes("finans"))
+    return ["Financial Services", "Technology, Information and Internet", "Internet Marketplace Platforms", "Software Development"];
+  if (s.includes("sağlık") || s.includes("health"))
+    return ["Hospitals and Health Care", "Technology, Information and Internet", "Medical and Diagnostic Laboratories"];
+  if (s.includes("saas") || s.includes("yazılım") || s.includes("software"))
+    return ["Software Development", "IT Services and IT Consulting", "Technology, Information and Internet"];
+  if (s.includes("tüketici") || s.includes("marka") || s.includes("retail") || s.includes("consumer"))
+    return ["Consumer Services", "Retail", "Advertising Services", "Marketing Services"];
+  if (s.includes("ajans") || s.includes("agency") || s.includes("reklam"))
+    return ["Advertising Services", "Marketing Services", "Business Consulting and Services"];
+  if (s.includes("eğitim") || s.includes("education"))
+    return ["Education", "E-Learning Providers", "Higher Education"];
+  return ["Software Development", "Technology, Information and Internet", "Business Consulting and Services"];
+}
+
+// ICP geography → Apify enum-geçerli ülke adları (Claude'a bırakılmaz — enum kısıtlı)
+function geographyToCountries(geography: string | null | undefined): string[] {
+  if (!geography) return ["Turkey"];
+  // toAsciiLower kullanılmalı: "İ".toLowerCase() → "i̇" (U+0307 birleşik nokta),
+  // bu yüzden plain .toLowerCase() ile "ingiltere" alt-string'i hiç eşleşmez.
+  const g = toAsciiLower(geography);
+  if (g.includes("dach")) return ["Germany", "Austria", "Switzerland"];
+  if (g.includes("ingiltere") || g.includes("uk") || g.includes("ireland") || g.includes("irlanda"))
+    return ["United Kingdom", "Ireland"];
+  if (g.includes("ab") || g.includes("europe") || g.includes("avrupa"))
+    return ["Turkey", "Germany", "France", "Netherlands", "Spain", "Italy", "Sweden", "Poland", "Belgium", "Austria"];
+  if (g.includes("global") || g.includes("dunya") || g.includes("worldwide"))
+    return ["Turkey", "United States", "United Kingdom", "Germany", "France"];
+  if (g.includes("us") || g.includes("abd") || g.includes("united states") || g.includes("america"))
+    return ["United States"];
+  // Türkiye (varsayılan) — şehir adları da buraya düşer
+  return ["Turkey"];
+}
+
+type ClaudeApifyParams = Pick<ApifyParams, "personTitle" | "seniority" | "industryKeywords" | "companyEmployeeSize">;
+
+// Claude ile ICP metninden Apify arama parametrelerini çıkar
+// NOT: enum-kısıtlı alanlar (industry, personCountry, companyCountry) Claude'a bırakılmaz
+async function extractApifyParams(icp: string, signals: string | null): Promise<ClaudeApifyParams> {
+  const fallback: ClaudeApifyParams = {
+    personTitle: defaultApifyParams.personTitle,
+    seniority: defaultApifyParams.seniority,
+    industryKeywords: defaultApifyParams.industryKeywords,
+    companyEmployeeSize: defaultApifyParams.companyEmployeeSize,
+  };
+
+  const msg = await anthropic.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 400,
+    messages: [
+      {
+        role: "user",
+        content: `ICP açıklamasından Apify B2B lead araması için parametreler çıkar.
+
+ICP: ${icp}
+Sinyaller: ${signals || "büyüme, işe alım, yeni ürün"}
+
+Kurallar:
+- companyEmployeeSize için YALNIZCA şu değerleri kullan (harf harf aynı): "0 - 1", "2 - 10", "11 - 50", "51 - 200", "201 - 500", "501 - 1000", "1001 - 5000", "5001 - 10000", "10000+"
+- seniority için YALNIZCA şu değerleri kullan: "Founder", "Chairman", "President", "CEO", "CXO", "Vice President", "Director", "Head", "Manager", "Senior"
+- personTitle: unvan adları (İngilizce veya Türkçe)
+- industryKeywords: serbest metin anahtar kelimeler (enum değil)
+
+Sadece JSON döndür:
+{
+  "personTitle": ["CEO", "Founder"],
+  "seniority": ["Founder", "CEO", "CXO"],
+  "industryKeywords": ["saas", "b2b", "dijital ajans"],
+  "companyEmployeeSize": ["11 - 50", "51 - 200"]
+}`,
+      },
+    ],
+  });
+
+  try {
+    const text = (msg.content[0] as { type: string; text: string }).text;
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    return jsonMatch ? JSON.parse(jsonMatch[0]) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function parseEmployeeCount(size: string | null | undefined): number | null {
+  if (!size) return null;
+  const match = size.match(/\d+/);
+  return match ? parseInt(match[0], 10) : null;
+}
+
+// Maskeli/geçersiz e-postayı ayıkla.
+// Apollo search "email_not_unlocked@domain.com" placeholder'ı döndürür — bu e-posta DEĞİLDİR.
+function realEmail(email: string | null | undefined): string | null {
+  if (!email) return null;
+  const e = email.trim().toLowerCase();
+  if (!e.includes("@")) return null;
+  if (e.includes("email_not_unlocked")) return null;
+  if (e.startsWith("noreply@") || e.startsWith("no-reply@")) return null;
+  return email.trim();
+}
+
+// Sınırlı eşzamanlılıkla map — sıralı döngü 300s timeout'a takılıyordu
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const i = cursor++;
+      results[i] = await fn(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+// ICP geography → Apollo lokasyon adları (serbest metin kabul eder)
+function geographyToApolloLocations(geography: string | null | undefined): string[] {
+  return geographyToCountries(geography);
+}
+
+// ICP sector → Apollo organization keyword tag'leri (serbest metin)
+function sectorToApolloKeywords(sector: string | null | undefined): string[] {
+  return sectorToIndustries(sector);
+}
+
+// Apify çalışan aralığı ("11 - 50") → Apollo formatı ("11,50")
+function toApolloEmployeeRange(size: string): string | null {
+  const nums = size.match(/\d+/g);
+  if (!nums) return null;
+  if (size.includes("+")) return "10001";
+  if (nums.length === 1) return `1,${nums[0]}`;
+  return `${nums[0]},${nums[1]}`;
+}
+
+type ClaudeApolloParams = {
+  person_titles: string[];
+  person_seniorities: string[];
+  q_organization_keyword_tags: string[];
+  organization_num_employees_ranges: string[];
+};
+
+// Claude ile ICP metninden Apollo arama parametreleri çıkar.
+// NOT: seniority Apollo'da enum-kısıtlı; geçerli değerler prompt'ta sabitlenir.
+async function extractApolloParams(
+  icp: string,
+  signals: string | null
+): Promise<ClaudeApolloParams> {
+  const fallback: ClaudeApolloParams = {
+    person_titles: ["CEO", "Founder", "Head of Growth", "Marketing Director"],
+    person_seniorities: ["owner", "founder", "c_suite", "vp", "head", "director"],
+    q_organization_keyword_tags: [],
+    organization_num_employees_ranges: ["11,20", "21,50", "51,100", "101,200"],
+  };
+
+  try {
+    const msg = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 400,
+      messages: [
+        {
+          role: "user",
+          content: `ICP açıklamasından Apollo.io People Search parametreleri çıkar.
+
+ICP: ${icp}
+Sinyaller: ${signals || "büyüme, işe alım, yeni ürün"}
+
+Kurallar:
+- person_seniorities için YALNIZCA şu değerler (harf harf aynı): "owner", "founder", "c_suite", "partner", "vp", "head", "director", "manager", "senior", "entry", "intern"
+- organization_num_employees_ranges için YALNIZCA şu format: "1,10", "11,20", "21,50", "51,100", "101,200", "201,500", "501,1000", "1001,2000", "2001,5000", "5001,10000", "10001"
+- person_titles: unvan adları (İngilizce tercih et — Apollo veritabanı İngilizce)
+- q_organization_keyword_tags: firma tanımlayan serbest anahtar kelimeler
+
+Sadece JSON döndür:
+{
+  "person_titles": ["CEO", "Founder"],
+  "person_seniorities": ["owner", "founder", "c_suite"],
+  "q_organization_keyword_tags": ["saas", "b2b"],
+  "organization_num_employees_ranges": ["11,20", "21,50"]
+}`,
+        },
+      ],
+    });
+
+    const text = (msg.content[0] as { type: string; text: string }).text;
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return fallback;
+    const parsed = JSON.parse(jsonMatch[0]) as Partial<ClaudeApolloParams>;
+    return {
+      person_titles: parsed.person_titles?.length ? parsed.person_titles : fallback.person_titles,
+      person_seniorities: parsed.person_seniorities?.length
+        ? parsed.person_seniorities
+        : fallback.person_seniorities,
+      q_organization_keyword_tags: parsed.q_organization_keyword_tags ?? [],
+      organization_num_employees_ranges: parsed.organization_num_employees_ranges?.length
+        ? parsed.organization_num_employees_ranges
+        : fallback.organization_num_employees_ranges,
+    };
+  } catch (e) {
+    logger.warn("Apollo parametre çıkarımı başarısız, varsayılan kullanılıyor", { error: e });
+    return fallback;
+  }
+}
+
+// ADIM 1 — Apollo People Search. 0 KREDİ harcar; e-postalar maskeli döner.
+async function searchApolloPeople(
+  params: ApolloParams,
+  limit: number
+): Promise<ApolloCandidate[]> {
+  const apiKey = process.env.APOLLO_API_KEY;
+  if (!apiKey) {
+    logger.error("APOLLO_API_KEY tanımlı değil");
+    return [];
+  }
+
+  const body: Record<string, unknown> = {
+    page: 1,
+    per_page: Math.min(100, limit),
+    // Yalnız doğrulanmış e-postası olan kişileri getir → enrich isabet oranı yükselir
+    contact_email_status: ["verified"],
+    ...(params.person_titles.length && { person_titles: params.person_titles }),
+    ...(params.person_seniorities.length && { person_seniorities: params.person_seniorities }),
+    ...(params.person_locations.length && { person_locations: params.person_locations }),
+    ...(params.organization_locations.length && {
+      organization_locations: params.organization_locations,
+    }),
+    ...(params.q_organization_keyword_tags.length && {
+      q_organization_keyword_tags: params.q_organization_keyword_tags,
+    }),
+    ...(params.organization_num_employees_ranges.length && {
+      organization_num_employees_ranges: params.organization_num_employees_ranges,
+    }),
+    // Sinyal filtreleri (varsa)
+    ...(params.person_not_titles?.length && { person_not_titles: params.person_not_titles }),
+    ...(params.organization_num_jobs_range && {
+      organization_num_jobs_range: params.organization_num_jobs_range,
+    }),
+    ...(params.organization_latest_funding_stage_cd?.length && {
+      organization_latest_funding_stage_cd: params.organization_latest_funding_stage_cd,
+    }),
+    ...(params.q_organization_job_titles?.length && {
+      q_organization_job_titles: params.q_organization_job_titles,
+    }),
+    ...(params.currently_using_any_of_technology_uids?.length && {
+      currently_using_any_of_technology_uids: params.currently_using_any_of_technology_uids,
+    }),
+    ...(params.organization_headcount_growth_6m_ranges?.length && {
+      organization_headcount_growth_6m_ranges: params.organization_headcount_growth_6m_ranges,
+    }),
+    ...(params.person_has_changed_jobs_in_last_n_months != null && {
+      person_has_changed_jobs_in_last_n_months: params.person_has_changed_jobs_in_last_n_months,
+    }),
+    ...(params.person_in_current_title_for_months_max != null && {
+      person_in_current_title_for_months_max: params.person_in_current_title_for_months_max,
+    }),
+    ...(params.contact_phone_types?.length && {
+      contact_phone_types: params.contact_phone_types,
+    }),
+  };
+
+  logger.info("Apollo arama başlıyor (0 kredi)", { path: APOLLO_SEARCH_PATH, limit });
+
+  const res = await fetch(`${APOLLO_BASE}/${APOLLO_SEARCH_PATH}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-api-key": apiKey },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    logger.error("Apollo arama başarısız", { status: res.status, body: errText.slice(0, 500) });
+    return [];
+  }
+
+  const data = (await res.json()) as {
+    people?: Array<Record<string, unknown>>;
+    total_entries?: number;
+  };
+  const people = data.people ?? [];
+  logger.info(
+    `Apollo ${people.length} aday döndürdü (toplam eşleşme: ${data.total_entries ?? "?"}, kredi harcanmadı)`
+  );
+
+  return people
+    .map((p): ApolloCandidate | null => {
+      const id = (p.id as string) || "";
+      if (!id) return null;
+      const org = p.organization as Record<string, unknown> | undefined;
+      return {
+        apollo_id: id,
+        first_name: (p.first_name as string) || "",
+        title: (p.title as string) || null,
+        organization_name: (org?.name as string) || "Bilinmeyen",
+        // Apollo e-postası olmayanı baştan söylüyor — bunlara kredi harcamayalım
+        has_email: p.has_email !== false,
+      };
+    })
+    .filter((c): c is ApolloCandidate => c !== null && c.has_email);
+}
+
+// ADIM 2 — Ön skorlama. Yalnız search metadata'sıyla, TEK Claude çağrısında.
+// Amaç: krediyi yalnız en iyi adaylara harcamak.
+async function preScoreCandidates(
+  candidates: ApolloCandidate[],
+  icp: string
+): Promise<number[]> {
+  if (candidates.length === 0) return [];
+
+  // NOT: search yalnızca unvan + firma adı veriyor (sektör/büyüklük/ülke enrichment'ta gelir).
+  // Lokasyon, çalışan aralığı ve sektör filtreleri zaten Apollo tarafında uygulandı;
+  // buradaki skorlama unvan hassasiyeti ve firma tanınırlığı için bir SIRALAMA katmanı.
+  const list = candidates
+    .map((c, i) => `${i}. ${c.title || "?"} @ ${c.organization_name}`)
+    .join("\n");
+
+  try {
+    const msg = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 2000,
+      messages: [
+        {
+          role: "user",
+          content: `Her adayı ICP'ye uyumuna göre 0-100 arası skorla.
+Elimizde yalnızca unvan ve firma adı var; unvanın ICP'ye ne kadar tam oturduğuna
+ve firma hakkında bildiklerine göre sırala.
+
+ICP: ${icp}
+
+Adaylar:
+${list}
+
+Sadece JSON dizisi döndür — her eleman {"i": index, "s": skor}:
+[{"i":0,"s":85},{"i":1,"s":42}]`,
+        },
+      ],
+    });
+
+    const text = (msg.content[0] as { type: string; text: string }).text;
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return candidates.map(() => 50);
+
+    const parsed = JSON.parse(jsonMatch[0]) as Array<{ i: number; s: number }>;
+    const scores = candidates.map(() => 50);
+    for (const { i, s } of parsed) {
+      if (i >= 0 && i < scores.length && typeof s === "number") {
+        scores[i] = Math.min(100, Math.max(0, s));
+      }
+    }
+    return scores;
+  } catch (e) {
+    logger.warn("Ön skorlama başarısız, tümü 50 kabul edildi", { error: e });
+    return candidates.map(() => 50);
+  }
+}
+
+// ADIM 3 — Enrichment. Lead başına 1 KREDİ (yalnız e-posta).
+// reveal_phone_number KESİNLİKLE false kalmalı — açılırsa kredi 8 katına çıkar.
+async function enrichApolloPeople(
+  candidates: ApolloCandidate[]
+): Promise<Contact[]> {
+  const apiKey = process.env.APOLLO_API_KEY;
+  if (!apiKey) return [];
+
+  const enriched: Contact[] = [];
+
+  for (let i = 0; i < candidates.length; i += APOLLO_MATCH_CHUNK) {
+    const chunk = candidates.slice(i, i + APOLLO_MATCH_CHUNK);
+
+    try {
+      const res = await fetch(`${APOLLO_BASE}/people/bulk_match`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey },
+        body: JSON.stringify({
+          reveal_personal_emails: false,
+          reveal_phone_number: false, // 8 kredi/kişi — asla açma
+          // Yalnız id gönderiyoruz: canlı testte id ile eşleşme birebir çalışıyor.
+          // Search'ten gelen soyad maskeli (St***d) — gönderilirse eşleşmeyi bozar.
+          details: chunk.map((c) => ({ id: c.apollo_id })),
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        logger.error("Apollo enrichment başarısız", {
+          status: res.status,
+          body: errText.slice(0, 500),
+        });
+        continue;
+      }
+
+      const data = (await res.json()) as { matches?: Array<Record<string, unknown> | null> };
+      const matches = data.matches ?? [];
+
+      matches.forEach((m, idx) => {
+        const base = chunk[idx];
+        if (!m || !base) return;
+
+        const email = realEmail(m.email as string | undefined);
+        // E-posta yoksa veya doğrulanmamışsa lead açma:
+        // gönderilemeyen/bounce eden lead deliverability'yi bozar.
+        if (!email) return;
+        const status = (m.email_status as string) || "";
+        if (status && status !== "verified") {
+          logger.info("Doğrulanmamış e-posta atlandı", { status, company: base.organization_name });
+          return;
+        }
+
+        const org = (m.organization ?? {}) as Record<string, unknown>;
+        const domain = org.primary_domain as string | undefined;
+
+        enriched.push({
+          // Enrich güncel işvereni ve tam adı döndürür —
+          // kişi firma değiştirdiyse burada yakalanır.
+          name: (m.name as string) || `${m.first_name || base.first_name} ${m.last_name || ""}`.trim(),
+          first_name: (m.first_name as string) || base.first_name,
+          last_name: (m.last_name as string) || "",
+          title: (m.title as string) || base.title,
+          email,
+          linkedin_url: (m.linkedin_url as string) || null,
+          organization: {
+            name: (org.name as string) || base.organization_name,
+            website_url:
+              (org.website_url as string) || (domain ? `https://${domain}` : null),
+            industry: (org.industry as string) || null,
+            estimated_num_employees: (org.estimated_num_employees as number) ?? null,
+            city: (org.city as string) || null,
+            country: (org.country as string) || null,
+          },
+        });
+      });
+    } catch (e) {
+      logger.error("Apollo enrichment isteği hata verdi", { error: e });
+    }
+  }
+
+  logger.info(`Apollo enrichment: ${enriched.length}/${candidates.length} doğrulanmış e-posta`);
+  return enriched;
+}
+
+// Apify actor ile lead ara
+async function searchApify(
+  params: ApifyParams,
+  maxResults: number
+): Promise<Contact[]> {
+  logger.info("Apify arama başlıyor", { ...params, maxResults });
+
+  const runInput: Record<string, unknown> = {
+    maxResults,
+    contactEmailStatus: "verified",
+    ...(params.personTitle.length > 0 && { personTitle: params.personTitle }),
+    ...(params.seniority.length > 0 && { seniority: params.seniority }),
+    ...(params.personCountry.length > 0 && { personCountry: params.personCountry }),
+    ...(params.companyCountry.length > 0 && { companyCountry: params.companyCountry }),
+    ...(params.industry.length > 0 && { industry: params.industry }),
+    ...(params.industryKeywords.length > 0 && { industryKeywords: params.industryKeywords }),
+    ...(params.companyEmployeeSize.length > 0 && { companyEmployeeSize: params.companyEmployeeSize }),
+  };
+
+  const res = await fetch(
+    `https://api.apify.com/v2/acts/braveleads~leads-finder-linkedin-apollo-leads-generator/runs?token=${process.env.APIFY_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(runInput),
+    }
+  );
+
+  if (!res.ok) {
+    const errText = await res.text();
+    logger.error("Apify run başlatılamadı", { status: res.status, body: errText });
+    return [];
+  }
+
+  const runData = (await res.json()) as { data?: { id?: string } };
+  const runId = runData.data?.id;
+  if (!runId) {
+    logger.error("Apify run ID alınamadı");
+    return [];
+  }
+
+  // Run tamamlanana kadar bekle (max 300s, 5s aralıklarla)
+  let attempts = 0;
+  while (attempts < 60) {
+    await new Promise((r) => setTimeout(r, 5000));
+    const statusRes = await fetch(
+      `https://api.apify.com/v2/actor-runs/${runId}?token=${process.env.APIFY_API_KEY}`
+    );
+    const statusData = (await statusRes.json()) as { data?: { status?: string } };
+    const status = statusData.data?.status;
+    if (status === "SUCCEEDED") break;
+    if (status === "FAILED" || status === "ABORTED") {
+      logger.error("Apify run başarısız", { status });
+      return [];
+    }
+    attempts++;
+  }
+
+  // Sonuçları çek
+  const itemsRes = await fetch(
+    `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${process.env.APIFY_API_KEY}&limit=${maxResults}`
+  );
+
+  if (!itemsRes.ok) {
+    logger.error("Apify dataset alınamadı");
+    return [];
+  }
+
+  const items = (await itemsRes.json()) as Array<Record<string, unknown>>;
+  logger.info(`Apify ${items.length} lead döndürdü`);
+
+  return items.map((p) => ({
+    name: (p.fullName as string) || `${p.firstName || ""} ${p.lastName || ""}`.trim(),
+    first_name: (p.firstName as string) || "",
+    last_name: (p.lastName as string) || "",
+    title: (p.position as string) || null,
+    email: (p.email as string) || null,
+    linkedin_url: (p.linkedinUrl as string) || null,
+    organization: {
+      name: (p.organizationName as string) || "Bilinmeyen",
+      website_url: (p.organizationWebsite as string) || null,
+      industry: (p.organizationIndustry as string) || null,
+      estimated_num_employees: parseEmployeeCount(p.organizationSize as string),
+      city: (p.organizationCity as string) || null,
+      country: (p.organizationCountry as string) || null,
+    },
+  }));
+}
+
+// Şirket araştırması: Firecrawl + Tavily + Claude
+async function researchCompany(
+  contact: Contact,
+  signals: string | null
+): Promise<ResearchResult> {
+  const orgName = contact.organization?.name || "Bilinmeyen";
+
+  // Firecrawl ile web sitesi
+  let websiteContent = "";
+  if (contact.organization?.website_url) {
+    try {
+      const result = await firecrawl.scrapeUrl(
+        contact.organization.website_url,
+        { formats: ["markdown"] }
+      ) as { markdown?: string };
+      if (result?.markdown) {
+        websiteContent = result.markdown.slice(0, 2000);
+      }
+    } catch (e) {
+      logger.warn("Firecrawl başarısız", {
+        url: contact.organization.website_url,
+        error: e,
+      });
+    }
+  }
+
+  // Tavily ile haberler
+  let newsContent = "";
+  try {
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: process.env.TAVILY_API_KEY,
+        query: `${orgName} news funding hiring 2024 2025`,
+        search_depth: "basic",
+        max_results: 3,
+      }),
+    });
+    const data = (await res.json()) as {
+      results?: Array<{ title: string; content: string }>;
+    };
+    newsContent = (data.results || [])
+      .map((r) => `${r.title}: ${r.content}`)
+      .join("\n\n")
+      .slice(0, 2000);
+  } catch (e) {
+    logger.warn("Tavily başarısız", { error: e });
+  }
+
+  // Claude ile sentez
+  const msg = await anthropic.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 600,
+    messages: [
+      {
+        role: "user",
+        content: `Şirket araştırmasına dayanarak satış sinyali çıkar.
+
+Şirket: ${orgName}
+Sektör: ${contact.organization?.industry || "bilinmiyor"}
+Çalışan: ${contact.organization?.estimated_num_employees || "bilinmiyor"}
+Konum: ${[contact.organization?.city, contact.organization?.country].filter(Boolean).join(", ") || "bilinmiyor"}
+
+Web sitesi:
+${websiteContent || "(scraple edilemedi)"}
+
+Haberler:
+${newsContent || "(haber bulunamadı)"}
+
+Aranan sinyaller: ${signals || "büyüme, işe alım, yeni ürün, finansman"}
+
+Sadece JSON döndür:
+{
+  "industry": "sektör",
+  "size": "çalışan sayısı/büyüklük",
+  "location": "şehir, ülke",
+  "whyNow": "1-2 cümle: somut neden şimdi sinyali",
+  "websiteSummary": "1 cümle web sitesi özeti",
+  "newsSummary": "1 cümle haber özeti"
+}`,
+      },
+    ],
+  });
+
+  try {
+    const text = (msg.content[0] as { type: string; text: string }).text;
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    return jsonMatch
+      ? JSON.parse(jsonMatch[0])
+      : fallbackResearch(contact);
+  } catch {
+    return fallbackResearch(contact);
+  }
+}
+
+function fallbackResearch(contact: Contact): ResearchResult {
+  return {
+    industry: contact.organization?.industry || "—",
+    size: contact.organization?.estimated_num_employees?.toString() || "—",
+    location:
+      [contact.organization?.city, contact.organization?.country]
+        .filter(Boolean)
+        .join(", ") || "—",
+    whyNow: "Sinyal bulunamadı.",
+    websiteSummary: "",
+    newsSummary: "",
+  };
+}
+
+// ICP uyumu ve satın alma sinyali skoru (0-100)
+async function scoreContact(
+  contact: Contact,
+  research: ResearchResult,
+  icp: string
+): Promise<number> {
+  const msg = await anthropic.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 10,
+    messages: [
+      {
+        role: "user",
+        content: `ICP uyumu + satın alma sinyali skorla (0-100). Sadece sayı döndür.
+
+ICP: ${icp}
+Şirket: ${contact.organization?.name}, ${research.industry}, ${research.size}
+Kişi: ${contact.name}, ${contact.title}
+Sinyal: ${research.whyNow}`,
+      },
+    ],
+  });
+
+  const text = (msg.content[0] as { type: string; text: string }).text.trim();
+  const score = parseInt(text, 10);
+  return isNaN(score) ? 50 : Math.min(100, Math.max(0, score));
+}
+
+// Lead'in ülkesi ve e-posta/web domain TLD'sinden e-posta dilini belirle.
+// Türkiye → Türkçe; diğer bilinen ülkeler kendi dillerine; geri kalan → İngilizce.
+function detectEmailLanguage(contact: Contact): string {
+  const country = (contact.organization?.country ?? "").toLowerCase().trim();
+  const emailDomain = (contact.email ?? "").split("@")[1]?.toLowerCase() ?? "";
+  const siteDomain = (contact.organization?.website_url ?? "").toLowerCase().replace(/https?:\/\//, "").split("/")[0];
+  const effectiveDomain = emailDomain || siteDomain;
+  const tld = effectiveDomain.split(".").pop() ?? "";
+
+  const COUNTRY_LANG: Record<string, string> = {
+    turkey: "Turkish",
+    türkiye: "Turkish",
+    germany: "German",
+    austria: "German",
+    switzerland: "German",
+    france: "French",
+    spain: "Spanish",
+    mexico: "Spanish",
+    argentina: "Spanish",
+    colombia: "Spanish",
+    italy: "Italian",
+    netherlands: "Dutch",
+    belgium: "Dutch",
+    poland: "Polish",
+    portugal: "Portuguese",
+    brazil: "Portuguese",
+    russia: "Russian",
+    japan: "Japanese",
+    "south korea": "Korean",
+    korea: "Korean",
+    "united states": "English",
+    "united kingdom": "English",
+    ireland: "English",
+    australia: "English",
+    canada: "English",
+  };
+
+  const TLD_LANG: Record<string, string> = {
+    tr: "Turkish",
+    de: "German",
+    fr: "French",
+    es: "Spanish",
+    it: "Italian",
+    nl: "Dutch",
+    pl: "Polish",
+    pt: "Portuguese",
+    ru: "Russian",
+    jp: "Japanese",
+    kr: "Korean",
+  };
+
+  return COUNTRY_LANG[country] ?? TLD_LANG[tld] ?? "English";
+}
+
+// Kişiselleştirilmiş e-posta yaz
+async function writeEmail(
+  contact: Contact,
+  research: ResearchResult,
+  campaign: Campaign,
+  emailLang: string = "Turkish"
+): Promise<{ subject: string; body: string }> {
+  const msg = await anthropic.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 800,
+    messages: [
+      {
+        role: "user",
+        content: `Bu lead için kişiselleştirilmiş B2B soğuk e-posta yaz.
+
+Alıcı: ${contact.name}, ${contact.title} @ ${contact.organization?.name}
+Sinyal: ${research.whyNow}
+Web özeti: ${research.websiteSummary}
+Haber özeti: ${research.newsSummary}
+Kampanya: ${campaign.name}
+
+Kurallar:
+- Max 4-5 cümle, samimi ve doğal
+- İlk cümlede "neden şimdi" sinyalini kullan
+- Satıcı tonu değil, merak uyandırıcı
+- Dil: ${emailLang}. Selamlama, kapanış ve tüm içerik bu dilde olsun.
+
+Sadece JSON döndür:
+{
+  "subject": "konu satırı",
+  "body": "e-posta gövdesi"
+}`,
+      },
+    ],
+  });
+
+  try {
+    const text = (msg.content[0] as { type: string; text: string }).text;
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    return jsonMatch
+      ? JSON.parse(jsonMatch[0])
+      : {
+          subject: `${contact.organization?.name} için bir fikrim var`,
+          body: `Merhaba ${contact.first_name},\n\n${research.whyNow}\n\nGörüşmek ister misiniz?\n\nSaygılarımla`,
+        };
+  } catch {
+    return {
+      subject: `${contact.organization?.name} için bir fikrim var`,
+      body: `Merhaba ${contact.first_name},\n\n${research.whyNow}\n\nGörüşmek ister misiniz?\n\nSaygılarımla`,
+    };
+  }
+}
+
+// Ana görev
+export const runCampaign = task({
+  id: "run-campaign",
+  // Lead başına Research+Score+Write ~12-15sn sürüyor. 300sn ile 25 lead'lik
+  // kampanya yarıda kesiliyordu; paralelleştirmeyle birlikte tavan da yükseltildi.
+  maxDuration: 600,
+  run: async (payload: { campaign_id: string; max_leads?: number }) => {
+    const db = getDb();
+
+    // Kampanyayı çek
+    const { data: campaign, error: campErr } = await db
+      .from("campaigns")
+      .select("*")
+      .eq("id", payload.campaign_id)
+      .single();
+
+    if (campErr || !campaign) {
+      throw new Error(`Kampanya bulunamadı: ${payload.campaign_id}`);
+    }
+
+    const { id: campaignId, owner_id: ownerId } = campaign as Campaign;
+    logger.info("Kampanya başlatıldı", { campaignId });
+
+    const c = campaign as Campaign;
+    const icpStr = icpToText(c.icp);
+    const signalsStr = signalsToText(c.signals);
+    const icpRecord = typeof c.icp === "object" && c.icp ? (c.icp as Record<string, string>) : {};
+
+    // Hedef lead sayısı — çağıran ne isterse o. (Eskiden Math.max(100, …) ile
+    // taban 100'e zorlanıyordu; Apollo'da bu kampanya başına 100 kredi demekti.)
+    const targetLeads = Math.min(100, Math.max(1, payload.max_leads ?? 25));
+    const useApollo = (process.env.LEAD_SOURCE ?? "apollo") === "apollo";
+
+    // ---------- FIND ----------
+    let contacts: Contact[] = [];
+
+    if (useApollo) {
+      await log(db, campaignId, null, ownerId, "find", "started", "ICP'e uygun adaylar Apollo'da aranıyor...");
+
+      const extracted = await extractApolloParams(icpStr, signalsStr);
+      const locations = geographyToApolloLocations(icpRecord.geography);
+      const keywords = sectorToApolloKeywords(icpRecord.sector);
+
+      const baseParams: ApolloParams = {
+        person_titles: extracted.person_titles,
+        person_seniorities: extracted.person_seniorities,
+        person_locations: locations,
+        organization_locations: locations,
+        q_organization_keyword_tags: [
+          ...keywords,
+          ...extracted.q_organization_keyword_tags,
+        ].slice(0, 10),
+        organization_num_employees_ranges: extracted.organization_num_employees_ranges,
+      };
+
+      // 1) Ara — 0 kredi. Önce satın-alma sinyali filtreleriyle dene:
+      // kampanyanın "signals" alanı artık Apollo'da ARAMA ANINDA uygulanıyor,
+      // sonradan tahmin edilmiyor. Maliyeti yok, havuz kalitesini yükseltiyor.
+      const signalFilters = signalsToApolloFilters(c.signals);
+      const poolSize = targetLeads * CANDIDATE_MULTIPLIER;
+
+      let candidates = await searchApolloPeople({ ...baseParams, ...signalFilters }, poolSize);
+
+      // Sinyal filtreleri havuzu aşırı daraltabiliyor (funding testinde -98%).
+      // Yeterli aday çıkmazsa sinyalsiz tekrar ara — kampanya boş dönmesin.
+      if (candidates.length < targetLeads) {
+        logger.info("Sinyal filtreleri havuzu daralttı, sinyalsiz tekrar aranıyor", {
+          bulunan: candidates.length,
+          hedef: targetLeads,
+        });
+        const wider = await searchApolloPeople(
+          { ...baseParams, person_not_titles: signalFilters.person_not_titles },
+          poolSize
+        );
+        if (wider.length > candidates.length) candidates = wider;
+      }
+
+      if (candidates.length === 0) {
+        await log(db, campaignId, null, ownerId, "find", "error", "Apollo'da aday bulunamadı. Kampanya parametrelerini kontrol edin.");
+        return { leads_created: 0 };
+      }
+
+      // 2) Ön skorla — 0 kredi, tek Claude çağrısı
+      const preScores = await preScoreCandidates(candidates, icpStr);
+      const ranked = candidates
+        .map((cand, i) => ({ cand, score: preScores[i] }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, targetLeads)
+        .map((r) => r.cand);
+
+      await log(
+        db, campaignId, null, ownerId, "find", "started",
+        `${candidates.length} aday tarandı, en iyi ${ranked.length} tanesi zenginleştiriliyor...`
+      );
+
+      // 3) Yalnız seçilenleri enrich et — lead başına 1 kredi
+      contacts = await enrichApolloPeople(ranked);
+    } else {
+      await log(db, campaignId, null, ownerId, "find", "started", "ICP'e uygun lead'ler Apify'da aranıyor...");
+
+      const extractedParams = await extractApifyParams(icpStr, signalsStr);
+      const countries = geographyToCountries(icpRecord.geography);
+      const industries = sectorToIndustries(icpRecord.sector);
+      contacts = await searchApify(
+        { ...extractedParams, personCountry: countries, companyCountry: countries, industry: industries },
+        targetLeads
+      );
+      // Apify de zaman zaman e-postasız kayıt döndürüyor — gönderilemez lead açmayalım
+      contacts = contacts.filter((ct) => realEmail(ct.email));
+    }
+
+    if (contacts.length === 0) {
+      await log(db, campaignId, null, ownerId, "find", "error", "Doğrulanmış e-postalı lead bulunamadı.");
+      return { leads_created: 0 };
+    }
+
+    // ---------- DEDUPE ----------
+    // Aynı kişiyi tekrar işlemek hem kredi hem Claude/Firecrawl maliyeti demek.
+    const emails = contacts.map((ct) => ct.email!).filter(Boolean);
+    const { data: existingLeads } = await db
+      .from("leads")
+      .select("email")
+      .eq("owner_id", ownerId)
+      .in("email", emails);
+
+    const known = new Set((existingLeads ?? []).map((r) => (r.email as string)?.toLowerCase()));
+    const seenInBatch = new Set<string>();
+    const freshContacts = contacts.filter((ct) => {
+      const key = ct.email!.toLowerCase();
+      if (known.has(key) || seenInBatch.has(key)) return false;
+      seenInBatch.add(key);
+      return true;
+    });
+
+    const skipped = contacts.length - freshContacts.length;
+    if (freshContacts.length === 0) {
+      await log(db, campaignId, null, ownerId, "find", "error", `${skipped} lead zaten mevcuttu, yeni lead yok.`);
+      return { leads_created: 0 };
+    }
+
+    await log(
+      db, campaignId, null, ownerId, "find", "completed",
+      `${freshContacts.length} yeni lead bulundu${skipped > 0 ? ` (${skipped} tekrar atlandı)` : ""}.`
+    );
+
+    // ---------- RESEARCH → SCORE → WRITE (paralel) ----------
+    // Sıralı döngü lead başına ~12-15sn sürüyordu; 25 lead 300sn limitini aşıyordu.
+    const tints = ["lime", "sage", "amber", "pink"];
+    let leadsCreated = 0;
+
+    await mapLimit(freshContacts, PIPELINE_CONCURRENCY, async (contact, i) => {
+      const tint = tints[i % tints.length];
+      const orgName = contact.organization?.name || contact.name;
+
+      try {
+        // RESEARCH
+        await log(db, campaignId, null, ownerId, "research", "started", `${orgName} araştırılıyor...`);
+        const research = await researchCompany(contact, signalsStr);
+        await log(db, campaignId, null, ownerId, "research", "completed", `"${research.whyNow.slice(0, 80)}"`);
+
+        // SCORE
+        const score = await scoreContact(contact, research, icpStr);
+        await log(db, campaignId, null, ownerId, "score", "completed", `${orgName}: ${score}/100 puan`);
+
+        // ICP skoru 80 altındaysa mesaj hazırlanmaz, lead düşük skor olarak kaydedilir
+        if (score < 80) {
+          await log(db, campaignId, null, ownerId, "score", "completed", `${orgName}: ${score}/100 — ICP eşiğinin altında, mesaj hazırlanmıyor.`);
+          await db.from("leads").insert({
+            campaign_id: campaignId,
+            owner_id: ownerId,
+            company: orgName,
+            initials: orgName.slice(0, 2).toUpperCase(),
+            tint,
+            contact: contact.name || null,
+            title: contact.title || null,
+            email: contact.email || null,
+            linkedin_url: contact.linkedin_url || null,
+            stage: "low_score",
+            score,
+            research: {
+              industry: research.industry,
+              size: research.size,
+              location: research.location,
+              whyNow: research.whyNow,
+            },
+            draft_email: null,
+          });
+          return;
+        }
+
+        // WRITE (yalnız skor >= 80)
+        const emailLang = detectEmailLanguage(contact);
+        await log(db, campaignId, null, ownerId, "write", "started", `${orgName} için e-posta yazılıyor (${emailLang})...`);
+        const draft = await writeEmail(contact, research, campaign as Campaign, emailLang);
+        await log(db, campaignId, null, ownerId, "write", "completed", `Taslak hazır — "${draft.subject}"`);
+
+        // LEAD KAYDET
+        const { data: lead, error: leadErr } = await db
+          .from("leads")
+          .insert({
+            campaign_id: campaignId,
+            owner_id: ownerId,
+            company: orgName,
+            initials: orgName.slice(0, 2).toUpperCase(),
+            tint,
+            contact: contact.name || null,
+            title: contact.title || null,
+            email: contact.email || null,
+            linkedin_url: contact.linkedin_url || null,
+            stage: "awaiting_approval",
+            score,
+            research: {
+              industry: research.industry,
+              size: research.size,
+              location: research.location,
+              whyNow: research.whyNow,
+              draftSubject: draft.subject,
+            },
+            draft_email: draft.body,
+          })
+          .select()
+          .single();
+
+        if (leadErr || !lead) {
+          logger.error("Lead kaydedilemedi", { error: leadErr, company: orgName });
+          return;
+        }
+
+        // MESSAGE KAYDET
+        await db.from("messages").insert({
+          lead_id: lead.id,
+          owner_id: ownerId,
+          direction: "outbound",
+          channel: "email",
+          subject: draft.subject,
+          body: draft.body,
+          status: "draft",
+        });
+
+        leadsCreated++;
+        logger.info(`Lead kaydedildi: ${orgName} — skor: ${score}`);
+      } catch (e) {
+        // Tek bir lead patlarsa tüm kampanya çökmesin
+        logger.error("Lead işlenemedi", { company: orgName, error: e });
+      }
+    });
+
+    logger.info("Kampanya tamamlandı", { leadsCreated, source: useApollo ? "apollo" : "apify" });
+    return { leads_created: leadsCreated };
+  },
+});

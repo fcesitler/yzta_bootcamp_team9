@@ -1,46 +1,55 @@
 import Link from "next/link";
-import { cn } from "@/lib/utils";
-import { funnel } from "@/lib/mock";
 
-export function PipelineFunnel() {
-  const max = Math.max(...funnel.map((s) => s.value));
+type PipelineStage = { n: string; label: string; value: number; color?: string };
+
+// Tailwind v4 statik tarama için hardcode — dinamik string'den gelen renk derlenmez
+const BAR_COLORS = [
+  "bg-lime-500",
+  "bg-forest-400",
+  "bg-forest-600",
+  "bg-forest-800",
+] as const;
+
+export function PipelineFunnel({ stages }: { stages: PipelineStage[] }) {
+  const max = Math.max(...stages.map((s) => s.value), 1);
 
   return (
-    <div className="rounded-card border border-hair bg-surface px-6 py-5">
-      <h2 className="text-[16px] font-medium text-text-strong">
-        Pipeline hunisi
-      </h2>
+    <div className="rounded-card border border-hair bg-surface px-6 py-5 shadow-card">
+      <h2 className="text-[15px] font-semibold text-text-strong">Pipeline</h2>
 
-      <div className="mt-5 grid grid-cols-4 gap-4">
-        {funnel.map((stage) => (
-          <Link
-            key={stage.n}
-            href="/leads"
-            className="group flex flex-col gap-2 rounded-[10px] p-2 transition-colors hover:bg-surface-2"
-          >
-            <span className="text-[12px] text-text-faint">{stage.n}</span>
-            <span className="text-[14px] font-medium text-text-strong">
-              {stage.label}
-            </span>
-            <span className="text-[24px] font-medium leading-none text-text-strong">
-              {stage.value}
-            </span>
-            <div className="mt-1 flex h-9 items-end">
-              <div
-                className={cn(
-                  "w-full rounded-[6px] transition-all group-hover:opacity-90",
-                  stage.color
-                )}
-                style={{ height: `${Math.round((stage.value / max) * 100)}%` }}
-              />
-            </div>
-          </Link>
-        ))}
+      <div className="mt-5 flex flex-col gap-4">
+        {stages.map((stage, i) => {
+          const pct = Math.max(5, Math.round((stage.value / max) * 100));
+          const barColor = BAR_COLORS[i % BAR_COLORS.length];
+          return (
+            <Link
+              key={stage.n}
+              href="/campaigns"
+              className="group flex flex-col gap-2"
+            >
+              <div className="flex items-baseline justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold text-text-faint">
+                    {stage.n}
+                  </span>
+                  <span className="text-[13px] font-medium text-text-strong transition-colors group-hover:text-forest-800">
+                    {stage.label}
+                  </span>
+                </div>
+                <span className="text-[20px] font-bold leading-none tracking-tight text-text-strong">
+                  {stage.value}
+                </span>
+              </div>
+              <div className="h-3 w-full overflow-hidden rounded-full bg-hair">
+                <div
+                  className={`h-3 rounded-full transition-all duration-500 group-hover:opacity-75 ${barColor}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </Link>
+          );
+        })}
       </div>
-
-      <p className="mt-4 text-[13px] text-text-muted">
-        Bir adıma tıkla → lead listesini filtrele.
-      </p>
     </div>
   );
 }
