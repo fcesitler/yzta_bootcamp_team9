@@ -3,13 +3,24 @@ import Anthropic from "@anthropic-ai/sdk";
 import { Firecrawl } from "@mendable/firecrawl-js";
 import { createClient } from "@supabase/supabase-js";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-const firecrawl = new Firecrawl({ apiKey: process.env.FIRECRAWL_API_KEY! });
+// Lazy: modül seviyesinde kurulursa eksik anahtar deploy'un index adımını düşürür.
+let _anthropic: Anthropic | null = null;
+function getAnthropic() {
+  return (_anthropic ??= new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }));
+}
+
+let _firecrawl: Firecrawl | null = null;
+function getFirecrawl() {
+  return (_firecrawl ??= new Firecrawl({ apiKey: process.env.FIRECRAWL_API_KEY! }));
+}
 
 function getDb() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+    }
   );
 }
 
@@ -356,7 +367,7 @@ async function extractApifyParams(icp: string, signals: string | null): Promise<
     companyEmployeeSize: defaultApifyParams.companyEmployeeSize,
   };
 
-  const msg = await anthropic.messages.create({
+  const msg = await getAnthropic().messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 400,
     messages: [
@@ -468,7 +479,7 @@ async function extractApolloParams(
   };
 
   try {
-    const msg = await anthropic.messages.create({
+    const msg = await getAnthropic().messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 400,
       messages: [
@@ -628,7 +639,7 @@ async function preScoreCandidates(
     .join("\n");
 
   try {
-    const msg = await anthropic.messages.create({
+    const msg = await getAnthropic().messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 2000,
       messages: [
@@ -851,7 +862,7 @@ async function researchCompany(
   let websiteContent = "";
   if (contact.organization?.website_url) {
     try {
-      const result = await firecrawl.scrapeUrl(
+      const result = await getFirecrawl().scrapeUrl(
         contact.organization.website_url,
         { formats: ["markdown"] }
       ) as { markdown?: string };
@@ -891,7 +902,7 @@ async function researchCompany(
   }
 
   // Claude ile sentez
-  const msg = await anthropic.messages.create({
+  const msg = await getAnthropic().messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 600,
     messages: [
@@ -956,7 +967,7 @@ async function scoreContact(
   research: ResearchResult,
   icp: string
 ): Promise<number> {
-  const msg = await anthropic.messages.create({
+  const msg = await getAnthropic().messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 10,
     messages: [
@@ -1038,7 +1049,7 @@ async function writeEmail(
   campaign: Campaign,
   emailLang: string = "Turkish"
 ): Promise<{ subject: string; body: string }> {
-  const msg = await anthropic.messages.create({
+  const msg = await getAnthropic().messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 800,
     messages: [

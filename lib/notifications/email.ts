@@ -1,6 +1,10 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Resend'i modül seviyesinde kurmuyoruz: anahtar yoksa constructor fırlatıyor ve
+// Trigger.dev task dosyalarını import ederken deploy'u komple düşürüyor.
+function getResend() {
+  return new Resend(process.env.RESEND_API_KEY);
+}
 
 const LABELS: Record<string, string> = {
   interested: "İlgileniyor",
@@ -23,7 +27,7 @@ export async function sendReplyNotification({
 
   const label = LABELS[classification] ?? classification;
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: "Hallederiz <onboarding@resend.dev>",
     to: ownerEmail,
     subject: `${company} yanıt verdi — ${label}`,

@@ -2,12 +2,19 @@ import { task, logger } from "@trigger.dev/sdk";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+// Lazy: modül seviyesinde kurulursa eksik anahtar deploy'un index adımını düşürür.
+let _anthropic: Anthropic | null = null;
+function getAnthropic() {
+  return (_anthropic ??= new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }));
+}
 
 function getDb() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+    }
   );
 }
 
@@ -75,7 +82,7 @@ async function generateBrief(
         .join("\n")
     : "(önceki mesaj yok)";
 
-  const msg = await anthropic.messages.create({
+  const msg = await getAnthropic().messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 700,
     system: `Sen bir AI SDR toplantı brief üreticisisin. Cal.com üzerinden toplantı ayarlanmış bir lead için Türkçe, kısa ve net bir brief hazırla. Tam olarak şu bölümleri kullan (markdown başlıkları aynen):
