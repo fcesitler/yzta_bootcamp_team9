@@ -15,12 +15,13 @@ export async function approveLead(leadId: string, bodyOverride?: string) {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Oturum bulunamadı." };
 
-  // 2. Lead + taslak bilgilerini servis-rol ile getir
+  // 2. Lead + taslak bilgilerini servis-rol ile getir (ownership check zorunlu)
   const admin = createAdminClient();
   const { data: lead, error: leadErr } = await admin
     .from("leads")
     .select("id, campaign_id, company, contact, email, draft_email, research, stage")
     .eq("id", leadId)
+    .eq("owner_id", user.id)
     .single();
 
   if (leadErr || !lead) return { error: "Lead bulunamadı." };
@@ -48,6 +49,7 @@ export async function approveLead(leadId: string, bodyOverride?: string) {
         to_name: lead.contact ?? "",
         subject,
         body,
+        reply_to: user.email ?? "",
       }),
     });
     if (!res.ok) {

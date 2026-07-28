@@ -6,6 +6,9 @@ const nextConfig: NextConfig = {
     root: path.resolve(__dirname),
   },
   devIndicators: false,
+  experimental: {
+    viewTransition: true,
+  },
 };
 
 export default nextConfig;

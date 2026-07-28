@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/app-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
+import { PageTransition } from "@/components/page-transition";
 
 export default async function AppLayout({
   children,
@@ -41,7 +42,7 @@ export default async function AppLayout({
   return (
     <AppShell user={userInfo}>
       <RealtimeRefresh />
-      {children}
+      <PageTransition>{children}</PageTransition>
     </AppShell>
   );
 }

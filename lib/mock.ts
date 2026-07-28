@@ -19,18 +19,18 @@ export type NavItem = {
 };
 
 export const navItems: NavItem[] = [
-  { key: "dashboard", label: "Dashboard", href: "/", icon: "LayoutGrid" },
-  { key: "campaigns", label: "Campaigns", href: "/campaigns", icon: "History" },
-  { key: "conversations", label: "Conversations", href: "/conversations", icon: "Inbox" },
-  { key: "briefs", label: "Meeting briefs", href: "/briefs", icon: "FileText" },
+  { key: "dashboard", label: "Ana Sayfa", href: "/", icon: "LayoutGrid" },
+  { key: "campaigns", label: "Kampanyalar", href: "/campaigns", icon: "History" },
+  { key: "conversations", label: "Konuşmalar", href: "/conversations", icon: "Inbox" },
+  { key: "briefs", label: "Toplantı Brifingleri", href: "/briefs", icon: "FileText" },
   {
     key: "close",
-    label: "Close & Contract",
+    label: "Kapat & Sözleşme",
     href: "/close",
     icon: "PenLine",
     lockLabel: "SPRINT 3",
   },
-  { key: "campaign", label: "Campaign", href: "/campaign", icon: "Crosshair" },
+  { key: "campaign", label: "Kampanya", href: "/campaign", icon: "Crosshair" },
 ];
 
 export const currentUser = {

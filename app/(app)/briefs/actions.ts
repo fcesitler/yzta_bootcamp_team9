@@ -25,7 +25,8 @@ export async function closeDeal(leadId: string, input: ContractInput) {
   const { error: stageErr } = await admin
     .from("leads")
     .update({ stage: "won" })
-    .eq("id", leadId);
+    .eq("id", leadId)
+    .eq("owner_id", user.id);
   if (stageErr) return { error: "Lead güncellenemedi." };
 
   const { error: contractErr } = await admin.from("contracts").insert({
@@ -57,7 +58,8 @@ export async function loseDeal(leadId: string) {
   const { error } = await admin
     .from("leads")
     .update({ stage: "lost" })
-    .eq("id", leadId);
+    .eq("id", leadId)
+    .eq("owner_id", user.id);
   if (error) return { error: "Lead güncellenemedi." };
 
   revalidatePath("/briefs");

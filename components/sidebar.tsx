@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { navItems, agentActivity, agentsActiveCount } from "@/lib/mock";
+import { navItems, agentsActiveCount } from "@/lib/mock";
 import { createClient } from "@/lib/supabase/client";
 import type { UserInfo } from "@/components/app-shell";
 
@@ -121,9 +121,6 @@ export function Sidebar({ user }: { user: UserInfo }) {
             {agentsActiveCount} ajan aktif
           </span>
         </div>
-        <p className="mt-1.5 text-[12px] leading-snug text-forest-200">
-          {agentActivity.message}
-        </p>
       </div>
 
       {/* Kullanıcı */}

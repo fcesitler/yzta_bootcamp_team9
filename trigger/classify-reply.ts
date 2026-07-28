@@ -1,6 +1,7 @@
 import { task, logger } from "@trigger.dev/sdk";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
+import { sendReplyNotification } from "../lib/notifications/email";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
@@ -11,9 +12,6 @@ function getDb() {
   );
 }
 
-// Orijinal Make flow'unda sabit gömülüydü — env ile override edilebilir, fallback aynı değer.
-const OWNER_ID =
-  process.env.HALLEDERIZ_OWNER_ID || "07339195-b942-4d21-b7d0-c12368be9f48";
 const CAL_LINK =
   process.env.CAL_BOOKING_LINK ||
   "https://cal.com/furkan-cesitler-dyxfcl/30min";
@@ -156,7 +154,7 @@ export const classifyReply = task({
     // Aynı e-postaya birden fazla lead olabilir — terminal olmayan en güncel olanı seç.
     const { data: leads, error: selErr } = await db
       .from("leads")
-      .select("id, stage, research")
+      .select("id, stage, research, owner_id, company")
       .eq("email", payload.from_email)
       .order("created_at", { ascending: false });
 
@@ -194,7 +192,7 @@ export const classifyReply = task({
     }
 
     const { error: msgErr } = await db.from("messages").insert({
-      owner_id: OWNER_ID,
+      owner_id: lead.owner_id,
       lead_id: lead.id,
       direction: "in",
       channel: "email",
@@ -205,6 +203,17 @@ export const classifyReply = task({
     if (msgErr) {
       logger.error("Mesaj kaydedilemedi", { error: msgErr.message });
       throw new Error(msgErr.message);
+    }
+
+    const { data: ownerData } = await db.auth.admin.getUserById(lead.owner_id);
+    const ownerEmail = ownerData.user?.email;
+    if (ownerEmail) {
+      await sendReplyNotification({
+        ownerEmail,
+        company: (lead as { company?: string }).company ?? "Firma",
+        classification: result.classification,
+        summary: result.summary,
+      }).catch((e) => logger.warn("Bildirim gönderilemedi", { error: e }));
     }
 
     logger.info("DB güncellendi", {

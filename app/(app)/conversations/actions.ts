@@ -19,6 +19,7 @@ export async function sendReply(leadId: string, replyBody: string) {
     .from("leads")
     .select("id, campaign_id, company, contact, email, research")
     .eq("id", leadId)
+    .eq("owner_id", user.id)
     .single();
 
   if (leadErr || !lead) return { error: "Lead bulunamadı." };
@@ -41,6 +42,7 @@ export async function sendReply(leadId: string, replyBody: string) {
         to_name: lead.contact ?? "",
         subject,
         body: replyBody,
+        reply_to: user.email ?? "",
       }),
     });
     if (!res.ok) return { error: `Gönderim başarısız (HTTP ${res.status}).` };

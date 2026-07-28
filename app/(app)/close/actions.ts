@@ -32,12 +32,19 @@ export async function saveContractTemplate(html: string) {
 }
 
 export async function prepareDraft(contractId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Oturum bulunamadı." };
+
   const admin = createAdminClient();
 
   const { data, error } = await admin
     .from("contracts")
     .select("*, leads(company, contact, email, campaign_id)")
     .eq("id", contractId)
+    .eq("owner_id", user.id)
     .single();
 
   if (error || !data) return { error: "Sözleşme bulunamadı." };

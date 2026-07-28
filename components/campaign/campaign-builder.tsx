@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import dynamic from "next/dynamic";
 import { ChevronDown, Check, Sparkles, Play } from "lucide-react";
+
+const ThinkingOrb = dynamic(
+  () => import("thinking-orbs").then((m) => ({ default: m.ThinkingOrb })),
+  { ssr: false }
+);
 import { cn } from "@/lib/utils";
 import {
   campaignOptions,
@@ -71,7 +77,18 @@ export function CampaignBuilder() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="relative mx-auto max-w-3xl">
+      {isPending && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[2px]">
+          <div className="flex items-center gap-4 rounded-full bg-forest-800 px-6 py-4 shadow-2xl ring-1 ring-lime-500/30">
+            <ThinkingOrb state="searching" size={64} theme="dark" />
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[16px] font-bold text-white">Kampanya başlatılıyor</span>
+              <span className="text-[12px] font-medium text-lime-400">Lead taraması hazırlanıyor…</span>
+            </div>
+          </div>
+        </div>
+      )}
       <h1 className="text-[28px] font-medium leading-tight tracking-tight text-text-strong">
         Kampanya
       </h1>
@@ -181,7 +198,7 @@ export function CampaignBuilder() {
           className="inline-flex items-center gap-2 rounded-[10px] bg-forest-800 px-5 py-2.5 text-[14px] font-medium text-paper transition-colors hover:bg-forest-700 disabled:opacity-60"
         >
           <Play className="size-4" strokeWidth={2.4} />
-          {isPending ? "Kaydediliyor…" : "Kaydet & kampanyayı başlat"}
+          Kaydet & kampanyayı başlat
         </button>
         {error && (
           <p className="text-[13px] font-medium text-danger">{error}</p>
