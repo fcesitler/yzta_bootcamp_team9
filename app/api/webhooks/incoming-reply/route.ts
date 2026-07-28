@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logActivity } from "@/lib/db/activity";
+import { sendReplyNotification } from "@/lib/notifications/email";
 
 export async function POST(request: Request) {
   try {
@@ -53,6 +54,7 @@ export async function POST(request: Request) {
       .eq("id", lead.id);
 
     await admin.from("messages").insert({
+      owner_id: lead.owner_id,
       lead_id: lead.id,
       direction: "in",
       channel: "email",
@@ -65,6 +67,17 @@ export async function POST(request: Request) {
       not_now: "Şimdi değil",
     };
     if (lead.owner_id) {
+      const { data: ownerData } = await admin.auth.admin.getUserById(lead.owner_id);
+      const ownerEmail = ownerData.user?.email;
+      if (ownerEmail) {
+        await sendReplyNotification({
+          ownerEmail,
+          company: lead.company,
+          classification,
+          summary,
+        }).catch((e) => console.error("Bildirim gönderilemedi:", e));
+      }
+
       await logActivity({
         ownerId: lead.owner_id,
         leadId: lead.id,

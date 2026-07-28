@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Sparkles, Pencil, Send, CalendarPlus, Check } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { classificationMeta, type Classification } from "@/lib/mock";
 import type { DbMessage } from "@/lib/db/types";
@@ -60,7 +61,6 @@ export function ConversationsView({ conversations }: { conversations: ConvItem[]
   const [editMode, setEditMode] = useState(false);
   const [editedText, setEditedText] = useState("");
   const [sent, setSent] = useState(false);
-  const [sendError, setSendError] = useState("");
   const [isPending, startTransition] = useTransition();
 
   const active = conversations.find((c) => c.lead.id === activeId) ?? conversations[0];
@@ -70,7 +70,6 @@ export function ConversationsView({ conversations }: { conversations: ConvItem[]
     setEditMode(false);
     setEditedText("");
     setSent(false);
-    setSendError("");
   }
 
   const classification = (active.lead.research?.replyClassification ?? "irrelevant") as Classification;
@@ -86,14 +85,14 @@ export function ConversationsView({ conversations }: { conversations: ConvItem[]
   }
 
   function handleSend() {
-    setSendError("");
     startTransition(async () => {
       const result = await sendReply(active.lead.id, replyToSend);
       if (result.success) {
         setSent(true);
         setEditMode(false);
+        toast.success(`${active.lead.company} — yanıt gönderildi`);
       } else {
-        setSendError(result.error ?? "Hata oluştu.");
+        toast.error("Yanıt gönderilemedi", { description: result.error ?? "Hata oluştu." });
       }
     });
   }
@@ -194,9 +193,6 @@ export function ConversationsView({ conversations }: { conversations: ConvItem[]
         </div>
 
         <div className="flex flex-col gap-2 border-t border-hair px-6 py-4">
-          {sendError && (
-            <p className="text-[13px] text-danger">{sendError}</p>
-          )}
           <div className="flex gap-2">
             <button
               onClick={handleEditToggle}

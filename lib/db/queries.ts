@@ -63,25 +63,19 @@ export async function getLeads(campaignId?: string): Promise<DbLead[]> {
 export async function getDashboardStats() {
   const supabase = await createClient();
 
-  const [campaigns, leads, messages, meetings, contracts] = await Promise.all([
+  const [campaigns, leads, messages] = await Promise.all([
     supabase.from("campaigns").select("id, name, status").order("created_at", { ascending: false }).limit(1),
     supabase.from("leads").select("id, stage, score"),
     supabase.from("messages").select("id, direction"),
-    supabase.from("meetings").select("id"),
-    supabase.from("contracts").select("id, amount, currency, status"),
   ]);
 
   const allLeads = leads.data ?? [];
   const allMessages = messages.data ?? [];
-  const allMeetings = meetings.data ?? [];
-  const allContracts = contracts.data ?? [];
   const activeCampaign = campaigns.data?.[0] ?? null;
 
   const sentMessages = allMessages.filter((m) => m.direction === "out").length;
   const replies = allMessages.filter((m) => m.direction === "in").length;
   const pendingApproval = allLeads.filter((l) => l.stage === "awaiting_approval").length;
-  const wonContracts = allContracts.filter((c) => c.status === "signed");
-  const wonRevenue = wonContracts.reduce((sum, c) => sum + (c.amount ?? 0), 0);
 
   const scoredLeads = allLeads.filter((l) => l.score != null);
   const avgScore = scoredLeads.length
@@ -98,16 +92,89 @@ export async function getDashboardStats() {
       { n: "03", label: "Yanıtladı", value: hasStage(["replied", "meeting_booked", "won"]), color: "bg-forest-600" },
       { n: "04", label: "Toplantı+", value: hasStage(["meeting_booked", "won"]), color: "bg-forest-800" },
     ],
+    // Funnel'da zaten görünen sayılar (gönderilen/yanıt/toplantı adedi) burada
+    // tekrarlanmaz — kartlar yalnızca funnel'ın vermediği KPI'ları taşır.
     metrics: [
-      { label: "Bulunan Lead", value: String(allLeads.length), sub: "", tone: "default" as const },
+      { label: "Bulunan Lead", value: String(allLeads.length), sub: "toplam pipeline", tone: "default" as const },
       { label: "Ort. ICP Skoru", value: avgScore != null ? String(avgScore) : "—", sub: avgScore != null ? "0-100 arası" : "henüz skor yok", tone: avgScore != null && avgScore >= 80 ? ("positive" as const) : ("default" as const) },
-      { label: "Onay Bekleyen", value: String(pendingApproval), sub: pendingApproval > 0 ? "senin sıran" : "", tone: pendingApproval > 0 ? ("warning" as const) : ("default" as const) },
-      { label: "Gönderilen", value: String(sentMessages), sub: "", tone: "default" as const },
-      { label: "Yanıtlar", value: String(replies), sub: sentMessages > 0 ? `%${Math.round((replies / sentMessages) * 100)} yanıt oranı` : "", tone: "default" as const },
-      { label: "Toplantılar", value: String(allMeetings.length), sub: "", tone: "default" as const },
-      { label: "Kazanılan", value: String(wonContracts.length), sub: wonRevenue > 0 ? `€${(wonRevenue / 1000).toFixed(1)}k MRR` : "", tone: wonContracts.length > 0 ? ("positive" as const) : ("default" as const) },
+      { label: "Yanıt Oranı", value: sentMessages > 0 ? `%${Math.round((replies / sentMessages) * 100)}` : "—", sub: sentMessages > 0 ? `${sentMessages} gönderilen · ${replies} yanıt` : "henüz gönderim yok", tone: replies > 0 ? ("positive" as const) : ("default" as const) },
+      { label: "Onay Bekleyen", value: String(pendingApproval), sub: pendingApproval > 0 ? "senin sıran" : "kuyruk temiz", tone: pendingApproval > 0 ? ("warning" as const) : ("default" as const) },
     ],
   };
+}
+
+export type DailyPoint = {
+  date: string; // YYYY-MM-DD (UTC)
+  found: number;
+  sent: number;
+  replied: number;
+};
+
+// Son N günün günlük aktivitesi. Gün anahtarları UTC üzerinden kurulur ki
+// Supabase'den gelen ISO timestamp'lerin ilk 10 karakteriyle birebir eşleşsin.
+export async function getDailyActivity(days = 14): Promise<DailyPoint[]> {
+  const supabase = await createClient();
+
+  const now = new Date();
+  const start = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (days - 1))
+  );
+  const sinceIso = start.toISOString();
+
+  const [leads, messages] = await Promise.all([
+    supabase.from("leads").select("created_at").gte("created_at", sinceIso),
+    supabase.from("messages").select("sent_at, direction").gte("sent_at", sinceIso),
+  ]);
+
+  const buckets = new Map<string, DailyPoint>();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(start);
+    d.setUTCDate(start.getUTCDate() + i);
+    const key = d.toISOString().slice(0, 10);
+    buckets.set(key, { date: key, found: 0, sent: 0, replied: 0 });
+  }
+
+  for (const l of leads.data ?? []) {
+    if (!l.created_at) continue;
+    const b = buckets.get(l.created_at.slice(0, 10));
+    if (b) b.found++;
+  }
+
+  for (const m of messages.data ?? []) {
+    if (!m.sent_at) continue;
+    const b = buckets.get(m.sent_at.slice(0, 10));
+    if (!b) continue;
+    if (m.direction === "out") b.sent++;
+    else b.replied++;
+  }
+
+  return [...buckets.values()];
+}
+
+export type ApprovalQueueLead = {
+  id: string;
+  company: string;
+  initials: string | null;
+  tint: string;
+  contact: string | null;
+  title: string | null;
+  score: number | null;
+};
+
+// Dashboard'daki aksiyon kuyruğu: en yüksek skorlu N lead + toplam bekleyen sayısı.
+export async function getApprovalQueue(limit = 4): Promise<{
+  leads: ApprovalQueueLead[];
+  total: number;
+}> {
+  const supabase = await createClient();
+  const { data, count } = await supabase
+    .from("leads")
+    .select("id, company, initials, tint, contact, title, score", { count: "exact" })
+    .eq("stage", "awaiting_approval")
+    .order("score", { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  return { leads: (data ?? []) as ApprovalQueueLead[], total: count ?? 0 };
 }
 
 export async function getAgentActivity(limit = 12): Promise<DbAgentActivity[]> {
@@ -118,16 +185,6 @@ export async function getAgentActivity(limit = 12): Promise<DbAgentActivity[]> {
     .order("created_at", { ascending: false })
     .limit(limit);
   return (data ?? []) as DbAgentActivity[];
-}
-
-export async function getApprovalLeads() {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("leads")
-    .select("id, company, initials, tint, contact, score, research")
-    .eq("stage", "awaiting_approval")
-    .order("score", { ascending: false });
-  return data ?? [];
 }
 
 export async function getLeadWithMessages(leadId: string) {

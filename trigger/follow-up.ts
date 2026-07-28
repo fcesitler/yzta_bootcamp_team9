@@ -11,6 +11,18 @@ function getDb() {
   );
 }
 
+async function getOwnerEmail(
+  db: ReturnType<typeof getDb>,
+  cache: Map<string, string | null>,
+  ownerId: string
+): Promise<string | null> {
+  if (cache.has(ownerId)) return cache.get(ownerId) ?? null;
+  const { data } = await db.auth.admin.getUserById(ownerId);
+  const email = data.user?.email ?? null;
+  cache.set(ownerId, email);
+  return email;
+}
+
 // Kaç gün yanıtsız kalınca follow-up atılır / en fazla kaç follow-up
 const FOLLOW_UP_AFTER_DAYS = Number(process.env.FOLLOW_UP_AFTER_DAYS || 3);
 const FOLLOW_UP_MAX = Number(process.env.FOLLOW_UP_MAX || 2);
@@ -79,6 +91,7 @@ export const followUpEmails = schedules.task({
     }
 
     const db = getDb();
+    const ownerEmailCache = new Map<string, string | null>();
     const cutoff = new Date(
       Date.now() - FOLLOW_UP_AFTER_DAYS * 24 * 60 * 60 * 1000
     ).toISOString();
@@ -131,6 +144,10 @@ export const followUpEmails = schedules.task({
         const subject = `Re: ${research.draftSubject ?? lead.company}`;
 
         // Make senaryosunun Follow-up rotası (type = "followup") üzerinden gönder
+        const replyTo = lead.owner_id
+          ? await getOwnerEmail(db, ownerEmailCache, lead.owner_id)
+          : null;
+
         const res = await fetch(webhook, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -142,6 +159,7 @@ export const followUpEmails = schedules.task({
             body,
             type: "followup",
             follow_up_number: followUpNumber,
+            reply_to: replyTo ?? "",
           }),
         });
         if (!res.ok) {

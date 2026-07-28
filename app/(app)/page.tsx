@@ -1,14 +1,23 @@
-import { getDashboardStats, getAgentActivity } from "@/lib/db/queries";
+import {
+  getDashboardStats,
+  getAgentActivity,
+  getDailyActivity,
+  getApprovalQueue,
+} from "@/lib/db/queries";
 import { createClient } from "@/lib/supabase/server";
 import { MetricCard } from "@/components/dashboard/metric-card";
+import { StatsGrid, StatItem } from "@/components/dashboard/stats-grid";
 import { PipelineFunnel } from "@/components/dashboard/pipeline-funnel";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
-import { ConversionDonut } from "@/components/dashboard/conversion-donut";
+import { ActivityChart } from "@/components/dashboard/activity-chart";
+import { ApprovalQueue } from "@/components/dashboard/approval-queue";
 
 export default async function DashboardPage() {
-  const [stats, activity, supabase] = await Promise.all([
+  const [stats, activity, daily, queue, supabase] = await Promise.all([
     getDashboardStats(),
     getAgentActivity(),
+    getDailyActivity(14),
+    getApprovalQueue(4),
     createClient(),
   ]);
 
@@ -22,7 +31,7 @@ export default async function DashboardPage() {
   const firstName = (profile?.full_name ?? user?.email ?? "Kullanıcı").split(" ")[0];
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="mx-auto max-w-7xl">
       <div className="flex items-baseline justify-between gap-6">
         <h1 className="text-[28px] font-medium leading-tight tracking-tight text-text-strong">
           Günaydın, {firstName}
@@ -39,23 +48,30 @@ export default async function DashboardPage() {
         )}
       </div>
 
-      {/* Hero card (row-span-2 on lg) + 6 regular cards */}
-      <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4">
-        <MetricCard
-          metric={stats.metrics[0]!}
-          hero
-          className="sm:col-span-4 lg:col-span-1 lg:row-span-2"
-        />
+      {/* Satır 1 — 4 eşit KPI kolonu */}
+      <StatsGrid>
+        <StatItem><MetricCard metric={stats.metrics[0]!} sparkline /></StatItem>
         {stats.metrics.slice(1).map((m) => (
-          <MetricCard key={m.label} metric={m} />
+          <StatItem key={m.label}><MetricCard metric={m} /></StatItem>
         ))}
+      </StatsGrid>
+
+      {/* Satır 2 — 14 günlük trend + pipeline (huninin tek kaynağı) */}
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <ActivityChart points={daily} />
+        </div>
+        <PipelineFunnel stages={stats.pipelineStages} />
       </div>
 
-      {/* Pipeline · Conversion gauge · Activity */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-3">
-        <PipelineFunnel stages={stats.pipelineStages} />
-        <ConversionDonut stages={stats.pipelineStages} />
-        <ActivityFeed items={activity} />
+      {/* Satır 3 — aksiyon kuyruğu + agent aktivitesi */}
+      <div className="mt-4 grid gap-4 lg:grid-cols-5">
+        <div className="lg:col-span-3">
+          <ApprovalQueue leads={queue.leads} total={queue.total} />
+        </div>
+        <div className="lg:col-span-2">
+          <ActivityFeed items={activity.slice(0, 5)} />
+        </div>
       </div>
     </div>
   );

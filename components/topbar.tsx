@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Search, Plus, Bell } from "lucide-react";
 import type { UserInfo } from "@/components/app-shell";
 
@@ -21,9 +22,6 @@ export function Topbar({ user }: { user: UserInfo }) {
         {/* Pipeline durumu */}
         <div className="hidden items-center gap-2 sm:flex">
           <span className="size-2 rounded-full bg-positive" />
-          <span className="text-[13px] font-medium text-positive">
-            Pipeline çalışıyor
-          </span>
         </div>
 
         {/* Bildirim zili */}
@@ -35,10 +33,10 @@ export function Topbar({ user }: { user: UserInfo }) {
         </button>
 
         {/* Yeni kampanya */}
-        <button className="flex items-center gap-2 rounded-[10px] bg-forest-800 px-4 py-2.5 text-[13px] font-semibold text-paper transition-colors hover:bg-forest-700">
+        <Link href="/campaign" className="flex items-center gap-2 rounded-[10px] bg-forest-800 px-4 py-2.5 text-[13px] font-semibold text-paper transition-colors hover:bg-forest-700">
           <Plus className="size-4" strokeWidth={2.4} />
           Yeni kampanya
-        </button>
+        </Link>
 
         {/* Kullanıcı avatarı */}
         <div className="flex items-center gap-2.5 border-l border-hair pl-3">

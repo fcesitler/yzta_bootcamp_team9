@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { X, Sparkles, Check, Pencil, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { type Lead, type Stage, stageMeta } from "@/lib/mock";
 import { approveLead } from "@/app/(app)/campaigns/actions";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 
 const tintClass: Record<string, string> = {
   lime: "bg-lime-100 text-forest-800",
@@ -33,33 +35,22 @@ export function LeadDrawer({
   onStageChange: (id: string, stage: Stage) => void;
 }) {
   const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [editBody, setEditBody] = useState("");
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  // Lead değişince hata mesajını ve edit modunu sıfırla
-  useEffect(() => {
-    setError("");
     setIsEditing(false);
     setEditBody(lead?.draftBody ?? "");
   }, [lead?.id, lead?.draftBody]);
 
-  const open = lead !== null;
-
   function handleApprove() {
     if (!lead) return;
-    setError("");
     startTransition(async () => {
       const result = await approveLead(lead.id, editBody || undefined);
       if (result?.error) {
-        setError(result.error);
+        toast.error("Gönderilemedi", { description: result.error });
       } else {
+        toast.success(`${lead.company} — e-posta gönderildi`);
         onStageChange(lead.id, "sent");
         onClose();
       }
@@ -67,21 +58,11 @@ export function LeadDrawer({
   }
 
   return (
-    <>
-      {/* Örtü */}
-      <div
-        onClick={onClose}
-        className={cn(
-          "fixed inset-0 z-40 bg-forest-900/20 transition-opacity",
-          open ? "opacity-100" : "pointer-events-none opacity-0"
-        )}
-      />
-      {/* Panel */}
-      <aside
-        className={cn(
-          "fixed right-0 top-0 z-50 flex h-full w-[440px] max-w-[92vw] flex-col border-l border-hair bg-surface shadow-xl transition-transform duration-300",
-          open ? "translate-x-0" : "translate-x-full"
-        )}
+    <Sheet open={lead !== null} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent
+        side="right"
+        showCloseButton={false}
+        className="w-[440px] max-w-[92vw] gap-0 p-0 bg-surface border-l border-hair"
       >
         {lead && (
           <>
@@ -192,9 +173,6 @@ export function LeadDrawer({
                   );
                 })}
               </div>
-              {error && (
-                <p className="mb-2 text-[12px] font-medium text-danger">{error}</p>
-              )}
               <div className="flex gap-2">
                 <button
                   onClick={handleApprove}
@@ -223,7 +201,7 @@ export function LeadDrawer({
             </div>
           </>
         )}
-      </aside>
-    </>
+      </SheetContent>
+    </Sheet>
   );
 }
