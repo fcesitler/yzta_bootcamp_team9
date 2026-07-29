@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import dynamic from "next/dynamic";
-import { ChevronDown, Check, Sparkles, Play } from "lucide-react";
+import { Check, Sparkles, Play } from "lucide-react";
 
 const ThinkingOrb = dynamic(
   () => import("thinking-orbs").then((m) => ({ default: m.ThinkingOrb })),
@@ -14,37 +14,52 @@ import {
   signalOptions,
   defaultSignals,
   matchingUniverse,
-  dailyPull,
 } from "@/lib/mock";
 import { saveCampaign } from "@/app/(app)/campaign/actions";
 
-function InlineSelect({
+function OptionGroup({
+  label,
   value,
   options,
   onChange,
-  label,
 }: {
+  label: string;
   value: string;
   options: string[];
   onChange: (v: string) => void;
-  label: string;
 }) {
   return (
-    <span className="relative inline-flex items-center align-baseline">
-      <select
-        aria-label={label}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="cursor-pointer appearance-none rounded-md border border-forest-100 bg-forest-50 py-1 pl-3 pr-8 text-[17px] font-medium text-forest-800 focus:border-forest-400 focus:outline-none"
-      >
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-2 size-4 text-forest-600" />
-    </span>
+    <div className="flex flex-col gap-2.5">
+      <p className="text-[12px] font-medium text-text-strong">{label}</p>
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+        {options.map((o) => {
+          const active = o === value;
+          return (
+            <button
+              key={o}
+              type="button"
+              onClick={() => onChange(o)}
+              className={cn(
+                "flex items-center gap-2 rounded-[12px] border px-4 py-3 text-left text-[14px] font-medium transition-all",
+                active
+                  ? "border-forest-600 bg-forest-50 text-forest-800 ring-2 ring-forest-100"
+                  : "border-hair bg-surface text-text-muted hover:border-forest-300 hover:text-text-strong"
+              )}
+            >
+              <span
+                className={cn(
+                  "flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors",
+                  active ? "border-forest-600 bg-forest-600" : "border-hair-2"
+                )}
+              >
+                {active && <Check className="size-3 text-white" strokeWidth={3} />}
+              </span>
+              <span className="min-w-0 flex-1">{o}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -93,8 +108,7 @@ export function CampaignBuilder() {
         Kampanya
       </h1>
       <p className="mt-2 text-[15px] leading-relaxed text-text-muted">
-        İdeal müşterini tarif et — Bul ajanı her sabah Apollo&apos;dan eşleşen
-        şirketleri getirir.
+        İdeal müşteri profilini tanımla, kampanyayı başlat.
       </p>
 
       {/* İdeal müşteri profili */}
@@ -102,38 +116,35 @@ export function CampaignBuilder() {
         <p className="text-[11px] font-medium uppercase tracking-wide text-text-faint">
           İdeal müşteri profili
         </p>
-        <p className="mt-4 text-[17px] leading-[2.6] text-text">
-          <InlineSelect
+
+        <div className="mt-5 flex flex-col gap-6">
+          <OptionGroup
             label="Sektör"
             value={industry}
             options={campaignOptions.industry}
-            onChange={(v) => setIndustry(v)}
-          />{" "}
-          alanında,{" "}
-          <InlineSelect
+            onChange={setIndustry}
+          />
+          <OptionGroup
             label="Çalışan sayısı"
             value={size}
             options={campaignOptions.size}
-            onChange={(v) => setSize(v)}
-          />{" "}
-          çalışanlı,{" "}
-          <InlineSelect
+            onChange={setSize}
+          />
+          <OptionGroup
             label="Bölge"
             value={geo}
             options={campaignOptions.geo}
-            onChange={(v) => setGeo(v)}
-          />{" "}
-          merkezli şirketlerdeki{" "}
-          <InlineSelect
+            onChange={setGeo}
+          />
+          <OptionGroup
             label="Rol"
             value={role}
             options={campaignOptions.role}
-            onChange={(v) => setRole(v)}
-          />{" "}
-          bul.
-        </p>
+            onChange={setRole}
+          />
+        </div>
 
-        <div className="mt-5 flex items-center justify-between gap-4 rounded-[10px] bg-lime-50 px-4 py-3">
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-[10px] bg-lime-50 px-4 py-3">
           <div className="flex items-start gap-2">
             <Sparkles className="mt-0.5 size-4 shrink-0 text-forest-700" />
             <p className="text-[13px] leading-relaxed text-forest-800">
@@ -166,7 +177,7 @@ export function CampaignBuilder() {
         <p className="text-[11px] font-medium uppercase tracking-wide text-text-faint">
           Araştırma ajanının önceliklendireceği sinyaller
         </p>
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap gap-2.5">
           {signalOptions.map((s) => {
             const active = signals.includes(s);
             return (
@@ -175,7 +186,7 @@ export function CampaignBuilder() {
                 type="button"
                 onClick={() => toggleSignal(s)}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] transition-colors",
+                  "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-[13px] transition-colors",
                   active
                     ? "border-forest-800 bg-forest-50 font-medium text-forest-800"
                     : "border-hair text-text-muted hover:border-hair-2 hover:text-text"

@@ -28,6 +28,46 @@ function formatMeetingTime(iso?: string) {
   }
 }
 
+// Brief, LLM tarafından `**Bölüm:**` markdown başlıklarıyla üretiliyor
+// (generate-meeting-brief.ts). Bunu bölümlere ayırıp düzgün hiyerarşiyle basıyoruz.
+function parseBrief(raw: string): { label: string; body: string }[] {
+  const regex = /\*\*(.+?):\*\*/g;
+  const heads: { label: string; contentStart: number; start: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(raw)) !== null) {
+    heads.push({ label: m[1].trim(), start: m.index, contentStart: m.index + m[0].length });
+  }
+  return heads.map((h, i) => {
+    const end = i + 1 < heads.length ? heads[i + 1].start : raw.length;
+    return { label: h.label, body: raw.slice(h.contentStart, end).replace(/\*\*/g, "").trim() };
+  });
+}
+
+function MeetingBrief({ raw }: { raw: string }) {
+  const sections = parseBrief(raw);
+  if (sections.length === 0) {
+    return (
+      <div className="whitespace-pre-line text-[14px] leading-relaxed text-text">
+        {raw.replace(/\*\*/g, "")}
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-5">
+      {sections.map((s) => (
+        <div key={s.label} className="flex flex-col gap-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-forest-700">
+            {s.label}
+          </p>
+          <p className="whitespace-pre-line text-[14px] leading-relaxed text-text">
+            {s.body || "—"}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const EMPTY_FORM: ContractInput = {
   scope: "",
   amount: 0,
@@ -157,8 +197,14 @@ export function BriefsView({ leads }: { leads: DbLead[] }) {
             <Sparkles className="size-3.5" />
             <p className="text-[11px] font-medium uppercase tracking-wide">AI Toplantı Brief&apos;i</p>
           </div>
-          <div className="mt-4 whitespace-pre-line text-[14px] leading-relaxed text-text">
-            {active.research?.meetingBrief ?? "Brief henüz oluşturulmadı."}
+          <div className="mt-4">
+            {active.research?.meetingBrief ? (
+              <MeetingBrief raw={active.research.meetingBrief} />
+            ) : (
+              <p className="text-[14px] leading-relaxed text-text">
+                Brief henüz oluşturulmadı.
+              </p>
+            )}
           </div>
         </div>
 

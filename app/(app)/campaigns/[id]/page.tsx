@@ -34,6 +34,7 @@ export default async function CampaignDetailPage({
     location: l.research?.location ?? "—",
     contact: l.contact ?? "—",
     title: l.title ?? "—",
+    linkedin: l.linkedin_url,
     stage: (l.stage as Lead["stage"]) ?? "awaiting_approval",
     score: l.score ?? 0,
     whyNow: l.research?.whyNow ?? "",
