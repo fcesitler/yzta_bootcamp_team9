@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { X, Sparkles, Check, Pencil, Loader2, Linkedin } from "lucide-react";
+import { X, Sparkles, Check, Pencil, Loader2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { type Lead, type Stage, stageMeta } from "@/lib/mock";
@@ -108,7 +108,7 @@ export function LeadDrawer({
                       rel="noopener noreferrer"
                       className="mt-1 inline-flex items-center gap-1 text-[12px] font-medium text-forest-700 transition-colors hover:text-forest-800"
                     >
-                      <Linkedin className="size-3.5" strokeWidth={2} />
+                      <ExternalLink className="size-3.5" strokeWidth={2} />
                       LinkedIn profili
                     </a>
                   )}

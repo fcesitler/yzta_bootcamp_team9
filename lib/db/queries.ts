@@ -228,7 +228,7 @@ export async function getLeadsWithBriefs() {
   const { data } = await supabase
     .from("leads")
     .select("*")
-    .eq("stage", "meeting_booked")
+    .not("research->>meetingBrief", "is", null)
     .order("created_at", { ascending: false });
   return (data ?? []) as DbLead[];
 }

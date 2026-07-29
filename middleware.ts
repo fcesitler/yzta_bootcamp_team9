@@ -25,23 +25,49 @@ export async function middleware(request: NextRequest) {
     }
   );
 
+  // getUser() her istekte Supabase'e ağ isteği atıyordu — navigasyon, prefetch ve
+  // RSC çağrılarının hepsine bir gidiş-dönüş biniyordu. getClaims() imzayı JWKS ile
+  // yerel doğrular (asimetrik anahtarlarda ağ isteği yok), aynı güvenlik garantisi.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: claims,
+  } = await supabase.auth.getClaims();
+  const user = claims?.claims ?? null;
 
   const { pathname } = request.nextUrl;
   const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/signup");
 
+  // Oturum tazelenirken yazılan çerezleri her yanıta taşımalıyız; aksi hâlde
+  // redirect/rewrite bunları düşürür ve kullanıcı çıkmış görünür.
+  const withCookies = (res: NextResponse) => {
+    supabaseResponse.cookies.getAll().forEach((c) => res.cookies.set(c));
+    return res;
+  };
+
+  // /landing dahili hedeftir — tanıtım sayfasının herkese açık adresi "/" kalsın.
+  if (pathname === "/landing") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    return withCookies(NextResponse.redirect(url));
+  }
+
+  // Giriş yapmamış ziyaretçi kök adreste tanıtım sayfasını görür (URL "/" kalır);
+  // giriş yapmış kullanıcı aynı adreste uygulamayı görmeye devam eder.
+  if (!user && pathname === "/") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/landing";
+    return withCookies(NextResponse.rewrite(url));
+  }
+
   if (!user && !isAuthPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    return NextResponse.redirect(url);
+    return withCookies(NextResponse.redirect(url));
   }
 
   if (user && isAuthPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
-    return NextResponse.redirect(url);
+    return withCookies(NextResponse.redirect(url));
   }
 
   return supabaseResponse;

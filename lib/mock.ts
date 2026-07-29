@@ -28,7 +28,6 @@ export const navItems: NavItem[] = [
     label: "Kapat & Sözleşme",
     href: "/close",
     icon: "PenLine",
-    lockLabel: "SPRINT 3",
   },
   { key: "campaign", label: "Kampanya", href: "/campaign", icon: "Crosshair" },
 ];
