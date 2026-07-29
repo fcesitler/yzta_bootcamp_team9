@@ -396,9 +396,9 @@ const integrations = [
     node: <MonogramIcon label="T." bg="#41FF54" fg="#0B1A0E" className="size-9" />,
   },
   {
-    name: "Make",
+    name: "n8n",
     role: "Otomasyon köprüsü",
-    node: <MonogramIcon label="M" bg="#6D00CC" className="size-9" />,
+    node: <MonogramIcon label="n8" bg="#FF6D5A" fg="#1A0800" className="size-9" />,
   },
   {
     name: "Claude",
