@@ -29,7 +29,7 @@ export async function sendReply(leadId: string, replyBody: string) {
     (lead.research as { draftSubject?: string } | null)?.draftSubject ?? "";
   const subject = draftSubject ? `Re: ${draftSubject}` : "Re: Hallederiz";
 
-  const webhook = process.env.MAKE_SEND_EMAIL_WEBHOOK;
+  const webhook = process.env.SEND_EMAIL_WEBHOOK;
   if (!webhook) return { error: "Gönderim webhook'u yapılandırılmamış." };
 
   try {

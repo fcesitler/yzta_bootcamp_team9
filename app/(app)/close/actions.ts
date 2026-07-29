@@ -57,7 +57,7 @@ export async function prepareDraft(contractId: string) {
   } | null;
   if (!lead?.email) return { error: "Lead e-posta adresi yok." };
 
-  const webhook = process.env.MAKE_CONTRACT_WEBHOOK;
+  const webhook = process.env.CONTRACT_WEBHOOK;
   if (!webhook) return { error: "Sözleşme webhook'u henüz yapılandırılmamış." };
 
   // Kullanıcının yüklediği şablonu al (yoksa varsayılan) → sözleşme HTML'ini
@@ -86,8 +86,8 @@ export async function prepareDraft(contractId: string) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(process.env.MAKE_CONTRACT_API_KEY
-          ? { "x-make-apikey": process.env.MAKE_CONTRACT_API_KEY }
+        ...(process.env.CONTRACT_WEBHOOK_API_KEY
+          ? { "x-make-apikey": process.env.CONTRACT_WEBHOOK_API_KEY }
           : {}),
       },
       body: JSON.stringify({

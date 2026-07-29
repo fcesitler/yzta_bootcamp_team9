@@ -36,7 +36,7 @@ export async function approveLead(leadId: string, bodyOverride?: string) {
   if (!body.trim()) return { error: "Taslak e-posta boş — gönderilemez." };
 
   // 3. Make webhook → Gmail gönderim
-  const webhook = process.env.MAKE_SEND_EMAIL_WEBHOOK;
+  const webhook = process.env.SEND_EMAIL_WEBHOOK;
   if (!webhook) return { error: "Gönderim webhook'u yapılandırılmamış." };
 
   try {

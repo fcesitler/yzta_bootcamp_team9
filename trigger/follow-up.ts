@@ -91,9 +91,9 @@ export const followUpEmails = schedules.task({
   cron: { pattern: "0 9 * * *", timezone: "Europe/Istanbul" },
   maxDuration: 300,
   run: async () => {
-    const webhook = process.env.MAKE_SEND_EMAIL_WEBHOOK;
+    const webhook = process.env.SEND_EMAIL_WEBHOOK;
     if (!webhook) {
-      logger.error("MAKE_SEND_EMAIL_WEBHOOK tanımlı değil — follow-up atlanıyor");
+      logger.error("SEND_EMAIL_WEBHOOK tanımlı değil — follow-up atlanıyor");
       return { sent: 0, skipped: "no-webhook" };
     }
 
