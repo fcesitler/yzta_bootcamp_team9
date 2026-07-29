@@ -333,15 +333,15 @@ function sectorToIndustries(sector: string | null | undefined): string[] {
     return ["Advertising Services", "Marketing Services", "Business Consulting and Services"];
   if (s.includes("eğitim") || s.includes("education"))
     return ["Education", "E-Learning Providers", "Higher Education"];
-  return ["Software Development", "Technology, Information and Internet", "Business Consulting and Services"];
+  // Hiçbir bilinen pattern eşleşmezse girişi doğrudan keyword olarak kullan.
+  // Virgülle ayrılmış çoklu değer (ör. "Emlak, Galeri") her biri ayrı keyword olur.
+  return sector.split(",").map((p) => p.trim()).filter(Boolean);
 }
 
-// ICP geography → Apify enum-geçerli ülke adları (Claude'a bırakılmaz — enum kısıtlı)
-function geographyToCountries(geography: string | null | undefined): string[] {
-  if (!geography) return ["Turkey"];
-  // toAsciiLower kullanılmalı: "İ".toLowerCase() → "i̇" (U+0307 birleşik nokta),
-  // bu yüzden plain .toLowerCase() ile "ingiltere" alt-string'i hiç eşleşmez.
-  const g = toAsciiLower(geography);
+// Tek bir coğrafya token'ından ülke listesi — virgülle bölünmüş değerlerin her parçası buraya girer.
+function resolveCountryToken(token: string): string[] {
+  const g = toAsciiLower(token.trim());
+  if (!g) return [];
   if (g.includes("dach")) return ["Germany", "Austria", "Switzerland"];
   if (g.includes("ingiltere") || g.includes("uk") || g.includes("ireland") || g.includes("irlanda"))
     return ["United Kingdom", "Ireland"];
@@ -351,8 +351,36 @@ function geographyToCountries(geography: string | null | undefined): string[] {
     return ["Turkey", "United States", "United Kingdom", "Germany", "France"];
   if (g.includes("us") || g.includes("abd") || g.includes("united states") || g.includes("america"))
     return ["United States"];
-  // Türkiye (varsayılan) — şehir adları da buraya düşer
-  return ["Turkey"];
+  if (g.includes("dubai") || g.includes("bae") || g.includes("uae") || g.includes("birlesik arap"))
+    return ["United Arab Emirates"];
+  if (g.includes("almanya") || g.includes("germany")) return ["Germany"];
+  if (g.includes("fransa") || g.includes("france")) return ["France"];
+  if (g.includes("hollanda") || g.includes("netherlands")) return ["Netherlands"];
+  if (g.includes("polonya") || g.includes("poland")) return ["Poland"];
+  if (g.includes("ispanya") || g.includes("spain")) return ["Spain"];
+  if (g.includes("italya") || g.includes("italy")) return ["Italy"];
+  if (g.includes("turkiye") || g.includes("turkey") || g.includes("istanbul") || g.includes("ankara") || g.includes("izmir"))
+    return ["Turkey"];
+  // Tanınmayan token → boş bırak (caller gerekirse default ekler)
+  return [];
+}
+
+// ICP geography → Apify enum-geçerli ülke adları (Claude'a bırakılmaz — enum kısıtlı).
+// Virgülle ayrılmış çoklu değer (ör. "Dubai, İngiltere") her biri ayrı işlenir,
+// sonuçlar birleştirilip tekilleştirilir.
+function geographyToCountries(geography: string | null | undefined): string[] {
+  if (!geography) return ["Turkey"];
+  // toAsciiLower kullanılmalı: "İ".toLowerCase() → "i̇" (U+0307 birleşik nokta),
+  // bu yüzden plain .toLowerCase() ile "ingiltere" alt-string'i hiç eşleşmez.
+  const parts = geography.split(",");
+  const results: string[] = [];
+  for (const part of parts) {
+    const countries = resolveCountryToken(part);
+    for (const c of countries) {
+      if (!results.includes(c)) results.push(c);
+    }
+  }
+  return results.length > 0 ? results : ["Turkey"];
 }
 
 type ClaudeApifyParams = Pick<ApifyParams, "personTitle" | "seniority" | "industryKeywords" | "companyEmployeeSize">;

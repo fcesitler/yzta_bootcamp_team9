@@ -85,12 +85,18 @@ async function generateBrief(
   const msg = await getAnthropic().messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 700,
-    system: `Sen bir AI SDR toplantı brief üreticisisin. Cal.com üzerinden toplantı ayarlanmış bir lead için Türkçe, kısa ve net bir brief hazırla. Tam olarak şu bölümleri kullan (markdown başlıkları aynen):
+    system: `Sen bir AI SDR toplantı brief üreticisisin. Cal.com üzerinden toplantı ayarlanmış bir lead için Türkçe, kısa ve net bir brief hazırla. Tam olarak şu dört bölümü kullan (markdown başlıkları aynen, başka başlık ekleme):
 
 **Firma:** [şirket + araştırmadan bildiklerimiz]
 **İletişim:** [kişi adı ve unvanı]
 **Konuşma Özeti:** [mesajlaşmadan ana noktalar — ne teklif ettik, nasıl karşılık verdiler]
-**Toplantı Notları:** [2-3 somut hazırlık önerisi]
+**Toplantı Notları:** [2-3 somut hazırlık önerisi, akıcı cümlelerle]
+
+Kesin kurallar:
+- Her bölümü akıcı, tam Türkçe cümlelerle doldur. Hiçbir bölümü boş bırakma.
+- Kısa çizgi (-), madde imi (•, *) veya "-" gibi yer tutucu KULLANMA; bilgi eksikse o bölümü elindeki verilerle anlamlı bir cümleyle yine de yaz.
+- Yalnızca yukarıdaki dört başlığı kullan; "Ağrı Noktası", "İş Modeli", "Hızlı Kazanım" gibi ek/alt başlık ÜRETME.
+- İngilizce terimler yerine Türkçe karşılıklarını kullan (reporting→raporlama, backoffice→arka ofis, white-label→markasız/etiketsiz çözüm, quick win→hızlı kazanım). Yazım ve dilbilgisine özen göster; "klient" değil "müşteri" yaz.
 
 Sadece brief'i döndür, başka açıklama yazma.`,
     messages: [

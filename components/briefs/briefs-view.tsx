@@ -28,6 +28,20 @@ function formatMeetingTime(iso?: string) {
   }
 }
 
+// Gövdeyi temizle: yalnız kısa çizgi/madde imi olan yer tutucu satırları at,
+// satır başındaki tire/bullet işaretlerini kaldır, fazla boş satırları sadeleştir.
+// (LLM zaman zaman boş bölümlere "-" placeholder koyuyordu.)
+function cleanBody(body: string): string {
+  return body
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => !/^\s*[-–—•*]+\s*$/.test(line)) // yalnız tire/bullet olan satırı at
+    .map((line) => line.replace(/^\s*[-–—•*]\s+/, "")) // baştaki bullet imini kaldır
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 // Brief, LLM tarafından `**Bölüm:**` markdown başlıklarıyla üretiliyor
 // (generate-meeting-brief.ts). Bunu bölümlere ayırıp düzgün hiyerarşiyle basıyoruz.
 function parseBrief(raw: string): { label: string; body: string }[] {
@@ -39,12 +53,13 @@ function parseBrief(raw: string): { label: string; body: string }[] {
   }
   return heads.map((h, i) => {
     const end = i + 1 < heads.length ? heads[i + 1].start : raw.length;
-    return { label: h.label, body: raw.slice(h.contentStart, end).replace(/\*\*/g, "").trim() };
+    return { label: h.label, body: cleanBody(raw.slice(h.contentStart, end).replace(/\*\*/g, "")) };
   });
 }
 
 function MeetingBrief({ raw }: { raw: string }) {
-  const sections = parseBrief(raw);
+  // Boş gövdeli bölümleri hiç gösterme — "TOPLANTI NOTLARI: -" gibi çıktıları eler.
+  const sections = parseBrief(raw).filter((s) => s.body.length > 0);
   if (sections.length === 0) {
     return (
       <div className="whitespace-pre-line text-[14px] leading-relaxed text-text">
@@ -214,7 +229,29 @@ export function BriefsView({ leads }: { leads: DbLead[] }) {
             <p className="mr-auto text-[13px] text-danger">{actionError}</p>
           )}
 
-          {lostConfirm ? (
+          {active.stage === "won" ? (
+            /* Anlaşma bağlandı — seçim kalıcı, durum gösterilir */
+            <div className="flex w-full items-center gap-2.5">
+              <span className="flex size-8 items-center justify-center rounded-full bg-positive-bg text-positive">
+                <Trophy className="size-4" strokeWidth={2.2} />
+              </span>
+              <div>
+                <p className="text-[14px] font-semibold text-text-strong">Anlaşma bağlandı</p>
+                <p className="text-[12px] text-text-muted">Sözleşme oluşturuldu · Kapat &amp; Sözleşme sekmesinde</p>
+              </div>
+            </div>
+          ) : active.stage === "lost" ? (
+            /* Anlaşma bağlanamadı — seçim kalıcı, durum gösterilir */
+            <div className="flex w-full items-center gap-2.5">
+              <span className="flex size-8 items-center justify-center rounded-full bg-danger-bg text-danger">
+                <AlertTriangle className="size-4" strokeWidth={2.2} />
+              </span>
+              <div>
+                <p className="text-[14px] font-semibold text-text-strong">Anlaşma bağlanamadı</p>
+                <p className="text-[12px] text-text-muted">Kayıp olarak işaretlendi</p>
+              </div>
+            </div>
+          ) : lostConfirm ? (
             <div className="flex w-full items-center gap-3">
               <p className="text-[13px] text-text-muted">Anlaşma kaybedildi olarak işaretlensin mi?</p>
               <button

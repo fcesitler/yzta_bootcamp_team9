@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Sparkles, Pencil, Send, CalendarPlus, Check } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
+import { Sparkles, Pencil, Send, CalendarPlus, Check, SearchX } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { classificationMeta, type Classification } from "@/lib/mock";
@@ -57,13 +58,36 @@ function formatTime(iso: string) {
 }
 
 export function ConversationsView({ conversations }: { conversations: ConvItem[] }) {
+  const searchParams = useSearchParams();
+  const query = (searchParams.get("q") ?? "").trim().toLocaleLowerCase("tr-TR");
+
+  // Topbar araması: firma, kişi, unvan ve mesaj içeriğinde eşleşenleri süz.
+  const filtered = useMemo(() => {
+    if (!query) return conversations;
+    return conversations.filter((c) => {
+      const haystack = [
+        c.lead.company,
+        c.lead.contact ?? "",
+        c.lead.title ?? "",
+        ...c.messages.map((m) => m.body),
+      ]
+        .join(" ")
+        .toLocaleLowerCase("tr-TR");
+      return haystack.includes(query);
+    });
+  }, [conversations, query]);
+
   const [activeId, setActiveId] = useState(conversations[0].lead.id);
   const [editMode, setEditMode] = useState(false);
   const [editedText, setEditedText] = useState("");
   const [sent, setSent] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  const active = conversations.find((c) => c.lead.id === activeId) ?? conversations[0];
+  // Aktif seçim filtre dışında kaldıysa görünen ilk konuşmaya düş.
+  // (conversations en az 1 eleman içerir — boşsa page.tsx farklı ekran basar.)
+  const hasResults = filtered.length > 0;
+  const active =
+    filtered.find((c) => c.lead.id === activeId) ?? filtered[0] ?? conversations[0];
 
   function switchActive(id: string) {
     setActiveId(id);
@@ -102,10 +126,25 @@ export function ConversationsView({ conversations }: { conversations: ConvItem[]
       {/* Konuşma listesi */}
       <div className="flex w-[300px] shrink-0 flex-col overflow-hidden rounded-card border border-hair bg-surface">
         <div className="border-b border-hair px-4 py-3">
-          <h1 className="text-[15px] font-medium text-text-strong">Konuşmalar</h1>
+          <h1 className="text-[15px] font-medium text-text-strong">
+            Konuşmalar
+            {query && (
+              <span className="ml-2 text-[12px] font-normal text-text-muted">
+                {filtered.length} sonuç
+              </span>
+            )}
+          </h1>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {conversations.map((c) => {
+          {!hasResults && (
+            <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
+              <SearchX className="size-6 text-text-faint" strokeWidth={1.6} />
+              <p className="text-[13px] text-text-muted">
+                “{searchParams.get("q")}” için konuşma bulunamadı.
+              </p>
+            </div>
+          )}
+          {filtered.map((c) => {
             const cls = (c.lead.research?.replyClassification ?? "irrelevant") as Classification;
             const preview = c.messages.find((m) => m.direction === "in")?.body ?? c.messages[0]?.body ?? "—";
             const isActive = c.lead.id === activeId;
@@ -137,6 +176,14 @@ export function ConversationsView({ conversations }: { conversations: ConvItem[]
       </div>
 
       {/* Thread */}
+      {!hasResults ? (
+        <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 rounded-card border border-hair bg-surface text-center">
+          <SearchX className="size-8 text-text-faint" strokeWidth={1.5} />
+          <p className="text-[14px] text-text-muted">
+            Aramanla eşleşen konuşma yok.
+          </p>
+        </div>
+      ) : (
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-card border border-hair bg-surface">
         <div className="flex items-center gap-3 border-b border-hair px-6 py-4">
           <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-[10px] text-[12px] font-medium", tintClass[active.lead.tint] ?? tintClass.lime)}>
@@ -226,6 +273,7 @@ export function ConversationsView({ conversations }: { conversations: ConvItem[]
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }
