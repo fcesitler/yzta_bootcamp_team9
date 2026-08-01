@@ -18,9 +18,11 @@ function getDb() {
   );
 }
 
-// Lead'in owner_id'si yoksa fallback — orijinal Make flow'undaki sabit değer.
-const OWNER_ID =
-  process.env.HALLEDERIZ_OWNER_ID || "07339195-b942-4d21-b7d0-c12368be9f48";
+// Lead'in owner_id'si yoksa son çare fallback. Eskiden burada sabit bir UUID vardı;
+// çok kiracılı kullanımda bu, müşterinin toplantı kaydını ve brief'ini SESSİZCE yanlış
+// hesaba yazmak demekti. Artık yalnız env'den geliyor ve o da yoksa görev hata veriyor —
+// yanlış hesaba yazmaktansa gürültüyle durmak doğru davranış.
+const OWNER_ID = process.env.HALLEDERIZ_OWNER_ID || null;
 
 // won/lost dışındaki leadler eşleşmeye aday (orijinal kural).
 const EXCLUDED_STAGES = new Set(["won", "lost"]);
@@ -181,6 +183,12 @@ export const generateMeetingBrief = task({
     );
 
     const ownerId = payload.owner_id ?? lead.owner_id ?? OWNER_ID;
+    if (!ownerId) {
+      throw new Error(
+        `owner_id çözülemedi (lead ${lead.id}) — yanlış hesaba yazmamak için brief kaydedilmedi. ` +
+          `Payload'a owner_id ekleyin veya HALLEDERIZ_OWNER_ID tanımlayın.`
+      );
+    }
     const research = (lead.research ?? {}) as Record<string, unknown>;
 
     // Toplantı süresi — start/end verildiyse hesapla, yoksa kolon default'u (30).

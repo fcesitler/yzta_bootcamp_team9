@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logActivity } from "@/lib/db/activity";
+import { verifyWebhookSecret } from "@/lib/webhooks/verify";
 
 // B6 — Toplantı ayarlandı receiver.
 // Make akışı: Cal.com "meeting booked" tetikleyici → ai-local-agent brief üretir
@@ -9,6 +10,10 @@ import { logActivity } from "@/lib/db/activity";
 // leads.stage='meeting_booked' + research.meetingBrief/meetingTime yazar.
 export async function POST(request: Request) {
   try {
+    if (!verifyWebhookSecret(request)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const {
       from_email,
@@ -18,6 +23,7 @@ export async function POST(request: Request) {
       meet_url,
       brief_text,
       brief,
+      owner_id,
     } = body as {
       from_email: string;
       scheduled_at: string;
@@ -25,6 +31,7 @@ export async function POST(request: Request) {
       platform?: string;
       meet_url?: string;
       brief_text?: string;
+      owner_id?: string;
       brief?: {
         keyPeople?: { name: string; role: string; note: string }[];
         talkingPoints?: string[];
@@ -41,10 +48,17 @@ export async function POST(request: Request) {
 
     const admin = createAdminClient();
 
-    const { data: lead } = await admin
+    // owner_id verilmişse hesap bazında kapsa; order+limit(1) ile çoklu satırda
+    // maybeSingle()'ın hata fırlatıp toplantıyı sessizce düşürmesini engelle.
+    let leadQuery = admin
       .from("leads")
       .select("id, research, stage, owner_id, campaign_id, company")
-      .eq("email", from_email)
+      .eq("email", from_email);
+    if (owner_id) leadQuery = leadQuery.eq("owner_id", owner_id);
+
+    const { data: lead } = await leadQuery
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (!lead) {

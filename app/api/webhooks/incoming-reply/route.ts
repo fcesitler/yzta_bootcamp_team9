@@ -3,15 +3,21 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logActivity } from "@/lib/db/activity";
 import { sendReplyNotification } from "@/lib/notifications/email";
+import { verifyWebhookSecret } from "@/lib/webhooks/verify";
 
 export async function POST(request: Request) {
   try {
+    if (!verifyWebhookSecret(request)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
-    const { from_email, classification, summary, suggested_reply } = body as {
+    const { from_email, classification, summary, suggested_reply, owner_id } = body as {
       from_email: string;
       classification: "interested" | "objection" | "not_now" | "irrelevant";
       summary: string;
       suggested_reply: string;
+      owner_id?: string;
     };
 
     if (!from_email || !classification) {
@@ -24,10 +30,19 @@ export async function POST(request: Request) {
 
     const admin = createAdminClient();
 
-    const { data: lead } = await admin
+    // owner_id verilmişse hesap bazında kapsa — aynı lead e-postası iki müşteride
+    // olabilir ve yanıt yanlış hesaba yazılmamalı.
+    // order+limit(1): çıplak maybeSingle() birden fazla satırda HATA fırlatıyordu,
+    // bu da yanıtın sessizce kaybolmasına ("matched: false") yol açıyordu.
+    let leadQuery = admin
       .from("leads")
       .select("id, research, stage, owner_id, campaign_id, company")
-      .eq("email", from_email)
+      .eq("email", from_email);
+    if (owner_id) leadQuery = leadQuery.eq("owner_id", owner_id);
+
+    const { data: lead } = await leadQuery
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (!lead) {
