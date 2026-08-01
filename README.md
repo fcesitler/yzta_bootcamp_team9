@@ -287,6 +287,71 @@ Sprint Review katılımcıları: Zeynep İbiş, Rumeysa Songür, Furkan Çeşitl
 **# SPRİNT 3**
 
 
+# SPRİNT 3 (Proje Son Sprinti)
 
-\---
+
+**Backlog Dağıtma Mantığı**
+
+Sprint 3, projenin son sprinti olup toplam 300 puanlık backlog'un tamamlandığı sprinttir. Bu sprint için hedef 80 puan olarak belirlenmiştir. Backlog; Sprint 2 kapsamında ücretsiz katmanda prototipi geliştirilen özelliklerin (Claude API ile ICP skorlama ve çoklu firma desteği) tamamlanması ile ürünün üretim ortamına hazır hale getirilmesi için gerekli çalışmaların (yönetim paneli–Supabase entegrasyonu, dağıtım (deployment), dokümantasyon ve tanıtım videosu hazırlanması) bir araya getirilmesiyle oluşturulmuştur.
+
+Sprint sürecinde planlamayı etkileyen teknik değişiklikler backlog'a yansıtılmıştır. İlk olarak, Make platformundaki premium aboneliğin sona ermesi nedeniyle otomasyon altyapısı n8n'e taşınmış ve arka plan görevlerinin daha güvenilir şekilde yönetilebilmesi amacıyla Trigger.dev entegrasyonu gerçekleştirilmiştir. Bu teknik geçişler backlog'a ek iş kalemleri olarak dahil edilmiştir. Ayrıca ürün, planlanandan önce Vercel üzerinden başarıyla canlı ortama alınmıştır.
+
+Backlog'un toplam 80 puan olarak korunabilmesi amacıyla, kapsamı Sprint 2'de tamamlanan pazar araştırması raporuyla büyük ölçüde örtüşen "Pazar ve Rakip Araştırması Sunumu" iş kalemi backlog'dan çıkarılmıştır. Böylece sprint kapsamı güncellenirken toplam iş yükü ve sprint hedefi sabit tutulmuştur.
+
+
+## Ürün Geliştirme Listesi URL'si*
+
+Trello Panosu
+
+
+**Daily Scrum Notları**
+
+## Daily Scrum Notları
+
+Ekip, Sprint 3 boyunca WhatsApp üzerinden düzenli günlük durum güncellemeleri (check-in) gerçekleştirmiştir. Ayrıca, ürünün son geliştirmelerinin değerlendirilmesi, kullanıcı arayüzünün nihai hâlinin belirlenmesi ve canlıya alınmadan önce son kararların verilmesi amacıyla Zoom üzerinden bir ekip toplantısı düzenlenmiştir.
+
+
+[Sprint 3 Daily Scrum Ekran Görüntüleri]
+
+Daily Scrum 1 Daily Scrum 2 Daily Scrum 3 Daily Scrum 4
+
+
+**Sprint Board Updates**
+
+Trello Board 1 Trello Board 2 Trello Board 3 Trello Board 4
+
+
+
+**Ürün Durumu**
+
+Sprint 3 kapsamında aşağıdaki entegrasyonlar ve geliştirmeler gerçek API'ler ve canlı veriler kullanılarak tamamlanmış ve doğrulanmıştır. Claude API ile ICP skorlama mantığı canlı ortama alınmış, sistem her lead için gerçek bir ICP skoru üretir hâle gelmiştir (örnek çıktılar: 92, 86, 81, 78). Next.js tabanlı yönetim paneli, Supabase ile entegre edilerek örnek veri yerine gerçek zamanlı verilerle çalışacak şekilde güncellenmiştir. Ürün Vercel üzerinden başarıyla canlı ortama alınmıştır.
+
+Otomasyon altyapısı, Make platformundaki premium aboneliğin sona ermesi nedeniyle n8n'e taşınmış ve bu geçiş test edilerek doğrulanmıştır. Ayrıca, otomasyon süreçlerinin daha güvenilir yönetilebilmesi amacıyla Trigger.dev entegrasyonu gerçekleştirilmiştir.
+
+Backlog kapsamında planlanan geliştirmelerden biri olan Gemini tabanlı ürün içi yardımcı, başarıyla entegre edilmiş ve çalışır durumda doğrulanmıştır. Bununla birlikte sistem yalnızca Türkçe değil, İngilizce dilinde de hizmet verecek şekilde çok dilli destek kazanmıştır.
+
+
+Ürün Görsel 1 Ürün Görsel 2 Ürün Görsel 3 Ürün Görsel 4 Ürün Görsel 5 Ürün Görsel 6
+
+
+**Sprint Review**
+
+Sprint 3'te ekip, Sprint 2'den devreden en önemli iki işi — Claude API ile ICP skorlama ve panelin gerçek veriyle bağlanması — tamamlamış ve ürünü Vercel üzerinden canlı ortama almıştır. Sprint ortasında Make platformundaki premium aboneliğin sona ermesi teknik engel oluşturmasına izin verilmemiş, ekip otomasyon altyapısını n8n ve Trigger.dev üzerine taşıyarak geliştirme sürecini kesintiye uğratmadan sürdürmüştür. Ayrıca Sprint backlog'unda planlanan geliştirmelerden biri olan Gemini tabanlı ürün içi yardımcı başarıyla entegre edilmiştir.
+
+Bu sprint, projenin son sprinti olduğu için Sprint Review aynı zamanda üç sprintlik sürecin genel bir değerlendirmesini de kapsamaktadır. Sprint 1'de ürün vizyonu ve sistem mimarisi oluşturulmuş (80/80 puan), Sprint 2'de gerçek API entegrasyonlarının temeli atılmış ve kritik özelliklerin geliştirilmesine başlanmış (140 puan hedefi), Sprint 3'te ise ürün canlı ortama alınarak proje teslime hazır hâle getirilmiştir.
+
+Süreç boyunca ekip, karşılaşılan teknik ve operasyonel zorluklara hızlı uyum sağlamış, değişen koşullara göre sprint planlarını güncellemiş ve iş birliği içinde çözüm odaklı bir çalışma yaklaşımı benimsemiştir. Üç sprint sonunda başlangıçta belirlenen kapsam eksiksiz şekilde tamamlanmış; çalışan, gerçek API'lerle entegre, canlı ortamda erişilebilir ve teslime hazır bir ürün ortaya çıkarılmıştır.
+ 
+Sprint Review katılımcıları: Zeynep İbiş, Rumeysa Songür, Furkan Çeşitler, Taha Demirkan, Zehra Nur Gölünç.
+
+
+**Sprint Retrospective**
+
+- Make'in premium aboneliğinin sprint ortasında sona ermesi, ekibin otomasyon katmanını n8n'e taşımasını gerektirmiştir. Bu geçiş plan dışı olmasına rağmen test edilip doğrulanarak sorunsuz tamamlanmıştır. Bu durum, üçüncü taraf araç bağımlılıklarının gelecekteki projelerde daha erken değerlendirilmesi gerektiğini göstermiştir.
+- Ürünün planlanandan önce, Sprint 3'ün ortasında Vercel üzerinden canlı ortama alınması olumlu bir sapma olarak değerlendirilmiştir.
+- Gemini tabanlı ürün içi yardımcı entegrasyonu sprint sürecinde eklenmiş ve başarıyla çalışır duruma getirilmiştir. Bu geliştirme ürün deneyimine önemli katkı sağlamış; benzer katma değerli özelliklerin gelecekte backlog'a daha erken dahil edilmesinin planlama ve takip açısından faydalı olacağı değerlendirilmiştir.
+- Proje boyunca (Sprint 1–Sprint 3) benimsenen çevik (Agile) çalışma yaklaşımı, düzenli ekip iletişimi, sprint bazlı planlama, değişen gereksinimlere hızlı uyum sağlanması ve sürekli geri bildirim mekanizması sayesinde projenin zamanında ve hedeflenen kapsamda tamamlanmasına önemli katkı sağlamıştır.
+- Son teslim öncesinde kalan çalışmalar (README dokümantasyonunun tamamlanması, tanıtım videosunun son hâline getirilmesi ve GitHub deposunun güncellenmesi) proje kapanışı için önceliklendirilmiştir.
+
+
 
