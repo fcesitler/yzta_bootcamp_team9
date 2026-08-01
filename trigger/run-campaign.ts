@@ -32,13 +32,28 @@ type Campaign = {
   signals: string[] | string | null;
 };
 
+// ICP'yi Claude'un göreceği metne çevirir. Eskiden ham "role: X, size: Y" virgül
+// dökümüydü — LLM için düz metin cümlesi gibi okunuyor, alan sınırları belirsizdi.
+// Şimdi sabit sırayla, etiketli, satır satır: bu format extraction/pre-scoring/
+// fit-scoring dahil icpStr kullanan HER Claude çağrısına otomatik yansır (tek yerden
+// düzeltiliyor). Bilinmeyen/ekstra alan varsa (gelecekte ICP şeması genişlerse) sona
+// ham haliyle eklenir, kaybolmaz.
+const ICP_FIELD_LABELS: Array<[key: string, label: string]> = [
+  ["role", "Rol"],
+  ["sector", "Sektör"],
+  ["size", "Büyüklük"],
+  ["geography", "Coğrafya"],
+];
+
 function icpToText(icp: Campaign["icp"]): string {
-  if (!icp) return "dijital ajans CEO'su, Türkiye";
+  if (!icp) return "Rol: dijital ajans CEO'su\nCoğrafya: Türkiye";
   if (typeof icp === "string") return icp;
-  return Object.entries(icp)
-    .filter(([, v]) => v)
-    .map(([k, v]) => `${k}: ${v}`)
-    .join(", ");
+  const knownKeys = new Set(ICP_FIELD_LABELS.map(([k]) => k));
+  const known = ICP_FIELD_LABELS.filter(([k]) => icp[k]).map(([k, label]) => `${label}: ${icp[k]}`);
+  const extra = Object.entries(icp)
+    .filter(([k, v]) => v && !knownKeys.has(k))
+    .map(([k, v]) => `${k}: ${v}`);
+  return [...known, ...extra].join("\n");
 }
 
 function signalsToText(signals: Campaign["signals"]): string | null {
@@ -54,6 +69,10 @@ type Contact = {
   title: string | null;
   email: string | null;
   linkedin_url: string | null;
+  // Apollo'nun kişi id'si. Arama sonucunda (0 kredi) zaten geliyor; lead'e kaydedilir
+  // ki sonraki kampanyalarda ENRICHMENT ÖNCESİ dedupe yapılabilsin (kredi tasarrufu).
+  // Apify yolunda doldurulmaz.
+  apollo_id?: string | null;
   organization: {
     name: string;
     website_url: string | null;
@@ -62,6 +81,12 @@ type Contact = {
     city: string | null;
     country: string | null;
   } | null;
+};
+
+type SenderProfile = {
+  full_name: string | null;
+  company: string | null;
+  sector: string | null;
 };
 
 type ResearchResult = {
@@ -317,25 +342,75 @@ const defaultApifyParams: ApifyParams = {
   companyEmployeeSize: ["11 - 50", "51 - 200"],
 };
 
-// ICP sector → Apify enum-geçerli industry adları (Claude'a bırakılmaz — enum kısıtlı)
-function sectorToIndustries(sector: string | null | undefined): string[] {
-  if (!sector) return [];
+// ICP.sector'ün "BİZİM SATTIĞIMIZ ürünün sektörü" anlamına geldiği sektörler.
+// Yalnız bu durumda hedef şirketin sektörü ICP.sector'den FARKLI (alıcı tarafı) olmalıdır.
+// Diğer TÜM sektörlerde (fintech, SaaS, sağlık, tüketici, ajans, eğitim) ICP.sector
+// doğrudan HEDEF şirketin sektörüdür — orada alıcı-tarafı çevirisi yapmak yanlış olur.
+// (Yaşanmış hata: "fintech & e-ticaret" kampanyasında skorlama prompt'una "hedef şirketin
+// sektörü fintech OLMAMALI, aranan sektörler: Financial Services..." gibi kendi içinde
+// çelişkili bir talimat gitti; Getaround gibi gerçek eşleşmeler 28/100 aldı.)
+function isBuyerSideSector(sector: string | null | undefined): boolean {
+  if (!sector) return false;
+  const s = sector.toLowerCase();
+  return (
+    s.includes("kereste") ||
+    s.includes("wood") ||
+    s.includes("timber") ||
+    s.includes("orman urunleri") ||
+    s.includes("orman ürünleri") ||
+    s.includes("lumber")
+  );
+}
+
+// ICP sector → bilinen kategori eşlemesi. "matched: true" demek, sector metni tanınan
+// bir kalıba uydu ve keywords listesi bilinçli seçildi (ör. alıcı-sektör eşlemesi) —
+// bu durumda çağıran, Claude'un icpStr'den bağımsız çıkardığı ham keyword'leri EKLEMEMELİ,
+// aksi halde (ör. kereste ICP'sinde) "wood"/"timber" gibi rakip-sektör kelimeleri geri sızar.
+// "matched: false" demek, hiçbir kalıp tutmadı ve girdi ham metin olarak kullanıldı.
+function resolveSectorMapping(sector: string | null | undefined): { keywords: string[]; matched: boolean } {
+  if (!sector) return { keywords: [], matched: false };
   const s = sector.toLowerCase();
   if (s.includes("fintech") || s.includes("e-ticaret") || s.includes("finans"))
-    return ["Financial Services", "Technology, Information and Internet", "Internet Marketplace Platforms", "Software Development"];
+    return { keywords: ["Financial Services", "Technology, Information and Internet", "Internet Marketplace Platforms", "Software Development"], matched: true };
   if (s.includes("sağlık") || s.includes("health"))
-    return ["Hospitals and Health Care", "Technology, Information and Internet", "Medical and Diagnostic Laboratories"];
+    return { keywords: ["Hospitals and Health Care", "Technology, Information and Internet", "Medical and Diagnostic Laboratories"], matched: true };
   if (s.includes("saas") || s.includes("yazılım") || s.includes("software"))
-    return ["Software Development", "IT Services and IT Consulting", "Technology, Information and Internet"];
+    return { keywords: ["Software Development", "IT Services and IT Consulting", "Technology, Information and Internet"], matched: true };
   if (s.includes("tüketici") || s.includes("marka") || s.includes("retail") || s.includes("consumer"))
-    return ["Consumer Services", "Retail", "Advertising Services", "Marketing Services"];
+    return { keywords: ["Consumer Services", "Retail", "Advertising Services", "Marketing Services"], matched: true };
   if (s.includes("ajans") || s.includes("agency") || s.includes("reklam"))
-    return ["Advertising Services", "Marketing Services", "Business Consulting and Services"];
+    return { keywords: ["Advertising Services", "Marketing Services", "Business Consulting and Services"], matched: true };
   if (s.includes("eğitim") || s.includes("education"))
-    return ["Education", "E-Learning Providers", "Higher Education"];
+    return { keywords: ["Education", "E-Learning Providers", "Higher Education"], matched: true };
+  // NOT: ICP.sector kullanıcı tarafından genelde "kendi ürettiğim/sattığım şey" olarak
+  // dolduruluyor (ör. bir kereste ihracatçısı "Wood, Timber" yazıyor). Bunu ham keyword
+  // olarak Apollo'ya göndermek, o sektördeki RAKİPLERİ bulur (Apollo kendi organizasyon
+  // etiketiyle eşleştirir). Kereste/odun gibi hammadde/ürün sektörleri için, aramanın
+  // asıl hedefi bu ürünü SATIN ALAN sektörler olmalı — mobilya, inşaat, yapı malzemeleri
+  // toptan satış/ithalat gibi. (Yaşanmış örnek: "Wood, Timber" ICP'siyle çalışan bir
+  // kampanya, Apollo'dan ABD'li kereste ÜRETİCİLERİ döndürmüştü.)
+  // 2026-07-31: "Import and Export" ve genel "Wholesale" canlı testte çok geniş
+  // çıktı — ürün fark etmeksizin HER ihracatçı/toptancıyı çekti (meyve, metal,
+  // kimya firmaları sızdı). Hasan Kulu'nun kendi sitesinde teyit ettiği alıcı
+  // segmentlerine (bayi/distribütör, inşaat/yapı malzemeleri, iç tasarım ve
+  // dekorasyon) daraltıldı; genel/geniş etiketler kaldırıldı.
+  if (isBuyerSideSector(sector))
+    return {
+      keywords: [
+        "Furniture and Home Furnishings Manufacturing",
+        "Construction",
+        "Wholesale Building Materials",
+        "Interior Design",
+      ],
+      matched: true,
+    };
   // Hiçbir bilinen pattern eşleşmezse girişi doğrudan keyword olarak kullan.
   // Virgülle ayrılmış çoklu değer (ör. "Emlak, Galeri") her biri ayrı keyword olur.
-  return sector.split(",").map((p) => p.trim()).filter(Boolean);
+  return { keywords: sector.split(",").map((p) => p.trim()).filter(Boolean), matched: false };
+}
+
+function sectorToIndustries(sector: string | null | undefined): string[] {
+  return resolveSectorMapping(sector).keywords;
 }
 
 // Tek bir coğrafya token'ından ülke listesi — virgülle bölünmüş değerlerin her parçası buraya girer.
@@ -349,7 +424,17 @@ function resolveCountryToken(token: string): string[] {
     return ["Turkey", "Germany", "France", "Netherlands", "Spain", "Italy", "Sweden", "Poland", "Belgium", "Austria"];
   if (g.includes("global") || g.includes("dunya") || g.includes("worldwide"))
     return ["Turkey", "United States", "United Kingdom", "Germany", "France"];
-  if (g.includes("us") || g.includes("abd") || g.includes("united states") || g.includes("america"))
+  // NOT: "south america"/"latin america" gibi bileşik bölge adları "america" alt-string'ini
+  // içerdiği için, ABD eşleşmesinden ÖNCE ve daha spesifik olarak kontrol edilmeli —
+  // aksi halde "South America" yanlışlıkla "United States" olarak çözümlenir (yaşanmış bug).
+  if (g.includes("guney amerika") || g.includes("south america") || g.includes("latin amerika") || g.includes("latin america"))
+    return ["Brazil", "Argentina", "Chile", "Peru", "Colombia", "Ecuador", "Uruguay", "Paraguay", "Bolivia", "Mexico"];
+  if (g.includes("afrika") || g.includes("africa"))
+    return ["South Africa", "Nigeria", "Egypt", "Kenya", "Morocco", "Ghana", "Ethiopia", "Algeria", "Tanzania", "Ivory Coast"];
+  // "amerika" (Türkçe yazım, k ile) "america" (İngilizce, c ile) kalıbına uymuyor —
+  // ayrı kontrol edilmezse boş sonuç döner, caller sessizce Turkey varsayılanına düşer
+  // (yaşanmış bug: "Amerika" yazan kullanıcı hep Türk kurucu almıştı).
+  if (g.includes("us") || g.includes("abd") || g.includes("united states") || g.includes("america") || g.includes("amerika"))
     return ["United States"];
   if (g.includes("dubai") || g.includes("bae") || g.includes("uae") || g.includes("birlesik arap"))
     return ["United Arab Emirates"];
@@ -470,11 +555,6 @@ async function mapLimit<T, R>(
 // ICP geography → Apollo lokasyon adları (serbest metin kabul eder)
 function geographyToApolloLocations(geography: string | null | undefined): string[] {
   return geographyToCountries(geography);
-}
-
-// ICP sector → Apollo organization keyword tag'leri (serbest metin)
-function sectorToApolloKeywords(sector: string | null | undefined): string[] {
-  return sectorToIndustries(sector);
 }
 
 // Apify çalışan aralığı ("11 - 50") → Apollo formatı ("11,50")
@@ -770,6 +850,7 @@ async function enrichApolloPeople(
           title: (m.title as string) || base.title,
           email,
           linkedin_url: (m.linkedin_url as string) || null,
+          apollo_id: base.apollo_id,
           organization: {
             name: (org.name as string) || base.organization_name,
             website_url:
@@ -908,21 +989,26 @@ async function researchCompany(
   // Tavily ile haberler
   let newsContent = "";
   try {
+    const currentYear = new Date().getFullYear();
     const res = await fetch("https://api.tavily.com/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         api_key: process.env.TAVILY_API_KEY,
-        query: `${orgName} news funding hiring 2024 2025`,
+        query: `${orgName} news funding hiring ${currentYear - 1} ${currentYear}`,
         search_depth: "basic",
         max_results: 3,
+        include_raw_content: false,
       }),
     });
     const data = (await res.json()) as {
-      results?: Array<{ title: string; content: string }>;
+      results?: Array<{ title: string; content: string; published_date?: string; url?: string }>;
     };
     newsContent = (data.results || [])
-      .map((r) => `${r.title}: ${r.content}`)
+      .map(
+        (r) =>
+          `[Kaynak: ${r.url || "bilinmiyor"} | Tarih: ${r.published_date || "bilinmiyor"}]\n${r.title}: ${r.content}`
+      )
       .join("\n\n")
       .slice(0, 2000);
   } catch (e) {
@@ -930,13 +1016,26 @@ async function researchCompany(
   }
 
   // Claude ile sentez
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  // Kullanıcı hiç sinyal çipi seçmediyse prompt'a sinyal listesi ENJEKTE EDİLMEZ.
+  // Eskiden boş değer `signals || "büyüme, işe alım, yeni ürün, finansman"` yedeğine
+  // düşüyordu; bu, kullanıcının seçmediği SaaS odaklı sinyalleri arattırıp whyNow'a
+  // "aranan işe alım, finansman veya yeni ürün sinyalleri mevcut değildir" gibi
+  // alakasız bir cümle yazdırıyordu (2026-08-01 gözlemi). Artık sinyal seçilmediğinde
+  // model serbest arama yapıyor: ne varsa onu raporluyor.
+  // NOT: signalsToText boş dizi için "" döndürür (null değil), o yüzden trim kontrolü şart.
+  const signalInstruction = signals?.trim()
+    ? `Öncelikli aranan sinyaller: ${signals}
+(Bunlar öncelikli; ancak şirkete özgü başka somut bir gelişme varsa onu da değerlendirebilirsin.)`
+    : `Aranan sinyal türü belirtilmemiş — şirkete özgü SOMUT ve GÜNCEL herhangi bir gelişmeyi değerlendir (yeni tesis/kapasite, işe alım, finansman, ürün lansmanı, ortaklık, pazar genişlemesi, sertifika/mevzuat vb.). Belirli bir sinyal türünü aramaya çalışma.`;
   const msg = await getAnthropic().messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 600,
     messages: [
       {
         role: "user",
-        content: `Şirket araştırmasına dayanarak satış sinyali çıkar.
+        content: `Şirket araştırmasına dayanarak satış sinyali çıkar. Bugünün tarihi: ${todayIso}.
 
 Şirket: ${orgName}
 Sektör: ${contact.organization?.industry || "bilinmiyor"}
@@ -946,19 +1045,27 @@ Konum: ${[contact.organization?.city, contact.organization?.country].filter(Bool
 Web sitesi:
 ${websiteContent || "(scraple edilemedi)"}
 
-Haberler:
+Haberler (her birinin kaynağı ve tarihi belirtilmiştir):
 ${newsContent || "(haber bulunamadı)"}
 
-Aranan sinyaller: ${signals || "büyüme, işe alım, yeni ürün, finansman"}
+${signalInstruction}
+
+KURALLAR (çok önemli, kesinlikle uy):
+1. Sadece yukarıdaki web sitesi ve haber metinlerinde AÇIKÇA yazan bilgileri kullan. Hiçbir rakam, tarih, tutar veya olayı uydurma ya da tahmin etme.
+2. Web sitesinden gelen bir bilgi ile haberden gelen ayrı bir bilgiyi TEK bir olaymış gibi birleştirme (ör. bir haberdeki yatırım tutarını başka bir haberdeki farklı bir yatırım/lokasyon ile karıştırma). Her iddia tek bir kaynağa dayanmalı.
+3. Bir haberin tarihi bugünden (${todayIso}) 18 aydan eskiyse veya tarih belirsizse, bunu "güncel değil" ya da "geçmiş" olarak nitele; yakın zamanda olmuş gibi sunma.
+4. Sağlanan metinlerde somut, doğrulanabilir bir "neden şimdi" sinyali yoksa whyNow alanına uydurma bir sinyal yazma — bunun yerine "Belirgin bir güncel sinyal bulunamadı." yaz.
+5. Emin olmadığın veya kaynakta net karşılığı olmayan hiçbir detayı (tutar, şehir, kişi sayısı vb.) whyNow'a ekleme.
+6. whyNow'da HANGİ sinyal türlerini aradığını yazma ("aranan işe alım/finansman sinyalleri yok" gibi). Kullanıcıyı ilgilendiren tek şey şirkete dair ne bulunduğudur; bulunamadıysa sadece "Belirgin bir güncel sinyal bulunamadı." de ve varsa kısa gerekçesini (ör. haberler şirketle ilgili değil / tarih çok eski) ekle.
 
 Sadece JSON döndür:
 {
   "industry": "sektör",
   "size": "çalışan sayısı/büyüklük",
   "location": "şehir, ülke",
-  "whyNow": "1-2 cümle: somut neden şimdi sinyali",
+  "whyNow": "1-2 cümle: sadece kaynaklarda geçen somut ve güncel neden şimdi sinyali, yoksa 'Belirgin bir güncel sinyal bulunamadı.'",
   "websiteSummary": "1 cümle web sitesi özeti",
-  "newsSummary": "1 cümle haber özeti"
+  "newsSummary": "1 cümle haber özeti (kaynakta yoksa boş bırak)"
 }`,
       },
     ],
@@ -989,31 +1096,139 @@ function fallbackResearch(contact: Contact): ResearchResult {
   };
 }
 
-// ICP uyumu ve satın alma sinyali skoru (0-100)
-async function scoreContact(
+type ScoreResult = {
+  icpFit: number;
+  signalStrength: number;
+  passes: boolean;
+};
+
+// 2026-07-31: signalStrength'i geçiş kapısından tamamen çıkardık. Kereste/inşaat gibi
+// dijital ayak izi zayıf, geleneksel B2B sektörlerde (özellikle G. Amerika/Afrika)
+// Tavily/Firecrawl çoğu zaman somut bir "neden şimdi" haberi bulamıyor — bu "ilgisiz
+// lead" anlamına gelmiyor, sadece haber kaynağı kıt demek. 4 test kampanyasında işlenen
+// ~20 adayın hiçbiri signalStrength 60'ı geçemedi; ICP uyumu 70+ olan gerçek adaylar
+// (ör. WAS Co Mexico: icpFit 78) sırf bu yüzden eleniyordu. signalStrength artık SADECE
+// whyNow metninin kalitesini/gösterimini etkiliyor — geçiş kararı yalnız icpFit'e bakıyor.
+// Onay öncesi taslak zaten insan gözden geçirmesinden geçiyor, o yüzden eşiği gevşetmek
+// "yanlış lead'e mail gitmesi" değil, "gözden geçirilecek taslak sayısının artması" riski taşıyor.
+const ICP_FIT_PASS = 75;
+
+// icpStr'e ICP'nin gerçek "aranan alıcı sektörü" bağlamını ekler. ICP.sector genelde
+// SATTIĞIMIZ ürünün sektörü (ör. "Wood, Timber") — hedef şirketlerin sektörü bu DEĞİL,
+// bunu SATIN ALAN sektörler (resolveSectorMapping'in çözdüğü liste). Bu bağlam
+// skorlama LLM'ine iletilmezse (önceki tasarımda iletilmiyordu), model literal
+// sektör metnini hedef şirketin sektörüyle karşılaştırıp gerçek eşleşen adaylara
+// bile tutarsız/düşük puan veriyordu (kanıt: iki farklı şirket, birebir aynı
+// "building materials" etiketiyle 78 ve 15 aldı — bkz. 2026-08-01 analiz).
+function buildIcpFitContext(
+  icp: string,
+  icpRecord: Record<string, string>,
+  buyerIndustries: string[]
+): string {
+  if (buyerIndustries.length === 0) return icp;
+  return `Rol: ${icpRecord.role || "belirtilmemiş"}
+Büyüklük: ${icpRecord.size || "belirtilmemiş"}
+Coğrafya: ${icpRecord.geography || "belirtilmemiş"}
+NOT: ICP'nin "sektör" alanı (${icpRecord.sector}) bizim SATTIĞIMIZ ürünün sektörü —
+hedef şirketin sektörü bu OLMAMALI, bunu SATIN ALAN sektörlerden biri olmalı.
+Aranan gerçek alıcı sektörleri: ${buyerIndustries.join(", ")}`;
+}
+
+// icpFit ve signalStrength İKİ AYRI çağrıyla hesaplanır (tek çağrıda birleşikken
+// whyNow metni icpFit'i de görüyordu — "bağımsız olsun" talimatına rağmen model
+// zayıf/boş whyNow'u gördüğünde genel güvenini düşürüp icpFit'i de aşağı çekiyordu).
+async function scoreIcpFit(
   contact: Contact,
   research: ResearchResult,
-  icp: string
+  icpContext: string
 ): Promise<number> {
   const msg = await getAnthropic().messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 10,
+    max_tokens: 60,
     messages: [
       {
         role: "user",
-        content: `ICP uyumu + satın alma sinyali skorla (0-100). Sadece sayı döndür.
+        content: `Bir şirketin ICP'ye uyum skorunu ver (0-100). SADECE rol, sektör, büyüklük, coğrafyaya bak — haber/sinyal bilgisi verilmiyor, onu değerlendirme.
 
-ICP: ${icp}
-Şirket: ${contact.organization?.name}, ${research.industry}, ${research.size}
-Kişi: ${contact.name}, ${contact.title}
-Sinyal: ${research.whyNow}`,
+ICP:
+${icpContext}
+
+Değerlendirilecek şirket: ${contact.organization?.name}
+Şirket sektörü: ${research.industry}
+Şirket büyüklüğü: ${research.size}
+Konum: ${research.location}
+Kişi: ${contact.name}, ünvan: ${contact.title}
+
+Puanlama rehberi:
+- 85-100: sektör aranan (alıcı) sektörlerden biriyle net eşleşiyor VE rol net eşleşiyor VE büyüklük/coğrafya uygun
+- 65-84: sektör ilişkili ama net değil, veya rol/büyüklük kısmen uyuyor
+- 35-64: sektör zayıf ilişkili veya rol belirsiz
+- 0-34: sektör aranan listeyle tamamen alakasız (ör. madencilik, tarım, sağlık, çevre hizmetleri, BT hizmetleri gibi hiç örtüşmeyen alanlar)
+
+Sadece JSON döndür: {"icpFit": 0-100}`,
       },
     ],
   });
 
-  const text = (msg.content[0] as { type: string; text: string }).text.trim();
-  const score = parseInt(text, 10);
-  return isNaN(score) ? 50 : Math.min(100, Math.max(0, score));
+  const text = (msg.content[0] as { type: string; text: string }).text;
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]) as { icpFit?: number };
+      if (typeof parsed.icpFit === "number") return Math.min(100, Math.max(0, parsed.icpFit));
+    } catch {
+      // fallback değer kullanılır
+    }
+  }
+  return 50;
+}
+
+async function scoreSignalStrength(research: ResearchResult): Promise<number> {
+  const msg = await getAnthropic().messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 40,
+    messages: [
+      {
+        role: "user",
+        content: `"Neden şimdi" sinyalinin ne kadar güncel/somut/güçlü olduğunu puanla (0-100).
+
+Sinyal metni: ${research.whyNow}
+
+Puanlama rehberi:
+- 0-20: sinyal bulunamadı veya tamamen genel/alakasız
+- 20-50: belirsiz tarihli veya dolaylı bir işaret var
+- 50-80: somut ama tarih net değil
+- 80-100: net, tarihli, güçlü büyüme/işe alım/yatırım/kapasite sinyali
+
+Sadece JSON döndür: {"signalStrength": 0-100}`,
+      },
+    ],
+  });
+
+  const text = (msg.content[0] as { type: string; text: string }).text;
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]) as { signalStrength?: number };
+      if (typeof parsed.signalStrength === "number") return Math.min(100, Math.max(0, parsed.signalStrength));
+    } catch {
+      // fallback değer kullanılır
+    }
+  }
+  return 50;
+}
+
+async function scoreContact(
+  contact: Contact,
+  research: ResearchResult,
+  icpContext: string
+): Promise<ScoreResult> {
+  const [icpFit, signalStrength] = await Promise.all([
+    scoreIcpFit(contact, research, icpContext),
+    scoreSignalStrength(research),
+  ]);
+  const passes = icpFit >= ICP_FIT_PASS;
+  return { icpFit, signalStrength, passes };
 }
 
 // Lead'in ülkesi ve e-posta/web domain TLD'sinden e-posta dilini belirle.
@@ -1036,6 +1251,12 @@ function detectEmailLanguage(contact: Contact): string {
     mexico: "Spanish",
     argentina: "Spanish",
     colombia: "Spanish",
+    chile: "Spanish",
+    peru: "Spanish",
+    ecuador: "Spanish",
+    uruguay: "Spanish",
+    paraguay: "Spanish",
+    bolivia: "Spanish",
     italy: "Italian",
     netherlands: "Dutch",
     belgium: "Dutch",
@@ -1075,8 +1296,14 @@ async function writeEmail(
   contact: Contact,
   research: ResearchResult,
   campaign: Campaign,
-  emailLang: string = "Turkish"
+  emailLang: string = "Turkish",
+  sender: SenderProfile
 ): Promise<{ subject: string; body: string }> {
+  const senderLine = [sender.full_name, sender.company].filter(Boolean).join(", ");
+  const senderBusiness = sender.company
+    ? `${sender.company}${sender.sector ? ` (${sender.sector})` : ""}`
+    : null;
+
   const msg = await getAnthropic().messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 800,
@@ -1085,6 +1312,7 @@ async function writeEmail(
         role: "user",
         content: `Bu lead için kişiselleştirilmiş B2B soğuk e-posta yaz.
 
+Gönderen: ${senderLine || "Bilinmiyor"}${senderBusiness ? `\nGönderenin işi: ${senderBusiness} — e-posta, alıcıyı bu işin somut değer önerisine (ör. ürün/hizmet) bağlamalı, "supply chain optimization" gibi belirsiz danışmanlık jargonu KULLANMA.` : ""}
 Alıcı: ${contact.name}, ${contact.title} @ ${contact.organization?.name}
 Sinyal: ${research.whyNow}
 Web özeti: ${research.websiteSummary}
@@ -1094,8 +1322,9 @@ Kampanya: ${campaign.name}
 Kurallar:
 - Max 4-5 cümle, samimi ve doğal
 - İlk cümlede "neden şimdi" sinyalini kullan
-- Satıcı tonu değil, merak uyandırıcı
+- Satıcı tonu değil, merak uyandırıcı ama gönderenin gerçek iş alanına somut şekilde bağlı
 - Dil: ${emailLang}. Selamlama, kapanış ve tüm içerik bu dilde olsun.
+- Kapanışta imza olarak "${sender.full_name || "[İsim]"}" kullan, placeholder bırakma
 
 Sadece JSON döndür:
 {
@@ -1106,6 +1335,8 @@ Sadece JSON döndür:
     ],
   });
 
+  const signOff = sender.full_name || "Saygılarımla";
+
   try {
     const text = (msg.content[0] as { type: string; text: string }).text;
     const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -1113,12 +1344,12 @@ Sadece JSON döndür:
       ? JSON.parse(jsonMatch[0])
       : {
           subject: `${contact.organization?.name} için bir fikrim var`,
-          body: `Merhaba ${contact.first_name},\n\n${research.whyNow}\n\nGörüşmek ister misiniz?\n\nSaygılarımla`,
+          body: `Merhaba ${contact.first_name},\n\n${research.whyNow}\n\nGörüşmek ister misiniz?\n\n${signOff}`,
         };
   } catch {
     return {
       subject: `${contact.organization?.name} için bir fikrim var`,
-      body: `Merhaba ${contact.first_name},\n\n${research.whyNow}\n\nGörüşmek ister misiniz?\n\nSaygılarımla`,
+      body: `Merhaba ${contact.first_name},\n\n${research.whyNow}\n\nGörüşmek ister misiniz?\n\n${signOff}`,
     };
   }
 }
@@ -1143,6 +1374,19 @@ export const runCampaign = task({
       throw new Error(`Kampanya bulunamadı: ${payload.campaign_id}`);
     }
 
+    // Gönderenin profil bilgisi — e-posta taslağı jenerik "supply chain optimization"
+    // danışmanlık diliyle değil, gönderenin gerçek şirketi/ürünü üzerinden yazılsın diye.
+    const { data: ownerProfile } = await db
+      .from("profiles")
+      .select("full_name, company, sector")
+      .eq("id", (campaign as Campaign).owner_id)
+      .single();
+    const sender: SenderProfile = {
+      full_name: (ownerProfile?.full_name as string) || null,
+      company: (ownerProfile?.company as string) || null,
+      sector: (ownerProfile?.sector as string) || null,
+    };
+
     const { id: campaignId, owner_id: ownerId } = campaign as Campaign;
     logger.info("Kampanya başlatıldı", { campaignId });
 
@@ -1150,6 +1394,14 @@ export const runCampaign = task({
     const icpStr = icpToText(c.icp);
     const signalsStr = signalsToText(c.signals);
     const icpRecord = typeof c.icp === "object" && c.icp ? (c.icp as Record<string, string>) : {};
+    // Skorlama ve Apollo araması ikisi de aynı sektör→alıcı eşlemesini kullanır —
+    // burada bir kez çözülüp paylaşılıyor (bkz. buildIcpFitContext, scoreIcpFit).
+    const sectorMapping = resolveSectorMapping(icpRecord.sector);
+    // Alıcı-tarafı bağlamı YALNIZ ICP.sector'ün "sattığımız ürün" olduğu sektörlerde
+    // verilir (bkz. isBuyerSideSector). Diğer kampanyalarda ham icpStr kullanılır —
+    // aksi halde skorlama prompt'u kendi kendisiyle çelişir.
+    const buyerIndustries = isBuyerSideSector(icpRecord.sector) ? sectorMapping.keywords : [];
+    const icpFitContext = buildIcpFitContext(icpStr, icpRecord, buyerIndustries);
 
     // Hedef lead sayısı — çağıran ne isterse o. (Eskiden Math.max(100, …) ile
     // taban 100'e zorlanıyordu; Apollo'da bu kampanya başına 100 kredi demekti.)
@@ -1164,17 +1416,18 @@ export const runCampaign = task({
 
       const extracted = await extractApolloParams(icpStr, signalsStr);
       const locations = geographyToApolloLocations(icpRecord.geography);
-      const keywords = sectorToApolloKeywords(icpRecord.sector);
 
       const baseParams: ApolloParams = {
         person_titles: extracted.person_titles,
         person_seniorities: extracted.person_seniorities,
         person_locations: locations,
         organization_locations: locations,
-        q_organization_keyword_tags: [
-          ...keywords,
-          ...extracted.q_organization_keyword_tags,
-        ].slice(0, 10),
+        // Sector bilinen bir kalıba uyduysa (ör. kereste → alıcı sektörleri), Claude'un
+        // icpStr'den bağımsız çıkardığı ham keyword'leri EKLEME — aksi halde "wood"/"timber"
+        // gibi rakip-sektör kelimeleri geri sızar ve alıcı eşlemesini sulandırır.
+        q_organization_keyword_tags: sectorMapping.matched
+          ? sectorMapping.keywords.slice(0, 10)
+          : [...sectorMapping.keywords, ...extracted.q_organization_keyword_tags].slice(0, 10),
         organization_num_employees_ranges: extracted.organization_num_employees_ranges,
       };
 
@@ -1202,6 +1455,40 @@ export const runCampaign = task({
 
       if (candidates.length === 0) {
         await log(db, campaignId, null, ownerId, "find", "error", "Apollo'da aday bulunamadı. Kampanya parametrelerini kontrol edin.");
+        return { leads_created: 0 };
+      }
+
+      // 1.5) ENRICHMENT ÖNCESİ DEDUPE — 0 kredi.
+      // Daha önce enrich edilmiş kişiler BURADA elenmeli. Aksi halde her biri için
+      // 1 kredi harcanıp sonra aşağıdaki e-posta dedupe'unda çöpe atılıyorlar.
+      // (2026-08-01 gözlemi: 5 lead istendi → 5 kredi harcandı → 4'ü tekrar çıktı →
+      // elde 1 lead kaldı. Veritabanı büyüdükçe bu israf oranı artıyor.)
+      // NOT: apollo_id kolonu yeni eklendi; eski lead'lerde null olduğu için
+      // aşağıdaki e-posta bazlı dedupe emniyet ağı olarak KORUNUYOR.
+      const { data: knownRows } = await db
+        .from("leads")
+        .select("apollo_id")
+        .eq("owner_id", ownerId)
+        .not("apollo_id", "is", null);
+
+      const knownApolloIds = new Set((knownRows ?? []).map((r) => r.apollo_id as string));
+      if (knownApolloIds.size > 0) {
+        const beforeCount = candidates.length;
+        candidates = candidates.filter((cand) => !knownApolloIds.has(cand.apollo_id));
+        const removed = beforeCount - candidates.length;
+        if (removed > 0) {
+          logger.info("Enrichment öncesi dedupe (kredi harcanmadı)", {
+            atlanan: removed,
+            kalan: candidates.length,
+          });
+        }
+      }
+
+      if (candidates.length === 0) {
+        await log(
+          db, campaignId, null, ownerId, "find", "error",
+          "Yeni aday kalmadı — bulunan adayların tamamı daha önce işlenmiş. Kredi harcanmadı."
+        );
         return { leads_created: 0 };
       }
 
@@ -1283,13 +1570,19 @@ export const runCampaign = task({
         const research = await researchCompany(contact, signalsStr);
         await log(db, campaignId, null, ownerId, "research", "completed", `"${research.whyNow.slice(0, 80)}"`);
 
-        // SCORE
-        const score = await scoreContact(contact, research, icpStr);
-        await log(db, campaignId, null, ownerId, "score", "completed", `${orgName}: ${score}/100 puan`);
+        // SCORE — icpFit ve signalStrength ayrı hesaplanır; geçiş kararı yalnız
+        // icpFit'e bakar (bkz. ICP_FIT_PASS), signalStrength sadece whyNow'u besler.
+        const { icpFit, signalStrength, passes } = await scoreContact(contact, research, icpFitContext);
+        await log(
+          db, campaignId, null, ownerId, "score", "completed",
+          `${orgName}: ICP uyumu ${icpFit}/100, sinyal ${signalStrength}/100`
+        );
 
-        // ICP skoru 80 altındaysa mesaj hazırlanmaz, lead düşük skor olarak kaydedilir
-        if (score < 80) {
-          await log(db, campaignId, null, ownerId, "score", "completed", `${orgName}: ${score}/100 — ICP eşiğinin altında, mesaj hazırlanmıyor.`);
+        if (!passes) {
+          await log(
+            db, campaignId, null, ownerId, "score", "completed",
+            `${orgName}: eşiğin altında (ICP ${icpFit}, sinyal ${signalStrength}) — mesaj hazırlanmıyor.`
+          );
           await db.from("leads").insert({
             campaign_id: campaignId,
             owner_id: ownerId,
@@ -1300,13 +1593,16 @@ export const runCampaign = task({
             title: contact.title || null,
             email: contact.email || null,
             linkedin_url: contact.linkedin_url || null,
+            apollo_id: contact.apollo_id ?? null,
             stage: "low_score",
-            score,
+            score: icpFit,
             research: {
               industry: research.industry,
               size: research.size,
               location: research.location,
+              website: contact.organization?.website_url ?? null,
               whyNow: research.whyNow,
+              signalStrength,
             },
             draft_email: null,
           });
@@ -1316,7 +1612,7 @@ export const runCampaign = task({
         // WRITE (yalnız skor >= 80)
         const emailLang = detectEmailLanguage(contact);
         await log(db, campaignId, null, ownerId, "write", "started", `${orgName} için e-posta yazılıyor (${emailLang})...`);
-        const draft = await writeEmail(contact, research, campaign as Campaign, emailLang);
+        const draft = await writeEmail(contact, research, campaign as Campaign, emailLang, sender);
         await log(db, campaignId, null, ownerId, "write", "completed", `Taslak hazır — "${draft.subject}"`);
 
         // LEAD KAYDET
@@ -1332,13 +1628,16 @@ export const runCampaign = task({
             title: contact.title || null,
             email: contact.email || null,
             linkedin_url: contact.linkedin_url || null,
+            apollo_id: contact.apollo_id ?? null,
             stage: "awaiting_approval",
-            score,
+            score: icpFit,
             research: {
               industry: research.industry,
               size: research.size,
               location: research.location,
+              website: contact.organization?.website_url ?? null,
               whyNow: research.whyNow,
+              signalStrength,
               draftSubject: draft.subject,
             },
             draft_email: draft.body,
@@ -1363,7 +1662,7 @@ export const runCampaign = task({
         });
 
         leadsCreated++;
-        logger.info(`Lead kaydedildi: ${orgName} — skor: ${score}`);
+        logger.info(`Lead kaydedildi: ${orgName} — ICP: ${icpFit}, sinyal: ${signalStrength}`);
       } catch (e) {
         // Tek bir lead patlarsa tüm kampanya çökmesin
         logger.error("Lead işlenemedi", { company: orgName, error: e });
