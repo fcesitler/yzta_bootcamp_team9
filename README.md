@@ -362,5 +362,11 @@ Sprint Review katılımcıları: Zeynep İbiş, Rumeysa Songür, Furkan Çeşitl
 
 </details>
 
+
+
 <details>
 <summary><h2>Ürün Tanıtım Videosu</h2></summary>
+
+[![Hallederiz Tanıtım Videosu](Sprint3_Screenshots/video-thumbnail.jpeg)](https://www.youtube.com/watch?v=mlfMc6E60uo)
+
+</details>
