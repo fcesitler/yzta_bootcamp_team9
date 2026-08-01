@@ -306,6 +306,12 @@ Backlog'un toplam 80 puan olarak korunabilmesi amacıyla, kapsamı Sprint 2'de t
 
 Ekip, Sprint 3 boyunca WhatsApp üzerinden düzenli günlük durum güncellemeleri (check-in) gerçekleştirmiştir. Ayrıca, ürünün son geliştirmelerinin değerlendirilmesi, kullanıcı arayüzünün nihai hâlinin belirlenmesi ve canlıya alınmadan önce son kararların verilmesi amacıyla Zoom üzerinden bir ekip toplantısı düzenlenmiştir.
 
+![Daily Scrum 2](Sprint3_Screenshots/Sprint%203.2.png)
+![Daily Scrum 7](Sprint3_Screenshots/Sprint%203.7.png)
+![Daily Scrum 8](Sprint3_Screenshots/Sprint%203.8.png)
+![Daily Scrum 12](Sprint3_Screenshots/Sprint%203.12.png)
+![Daily Scrum 13](Sprint3_Screenshots/Sprint%203.13.png)
+
 
 **Sprint Board Updates**
 
@@ -323,7 +329,15 @@ Otomasyon altyapısı, Make platformundaki premium aboneliğin sona ermesi neden
 Backlog kapsamında planlanan geliştirmelerden biri olan Gemini tabanlı ürün içi yardımcı, başarıyla entegre edilmiş ve çalışır durumda doğrulanmıştır. Bununla birlikte sistem yalnızca Türkçe değil, İngilizce dilinde de hizmet verecek şekilde çok dilli destek kazanmıştır.
 
 
-Ürün Görsel 1 Ürün Görsel 2 Ürün Görsel 3 Ürün Görsel 4 Ürün Görsel 5 Ürün Görsel 6
+![Ürün Görsel 1](Sprint2_Screenshots/ÜrünGörsel-1.jpeg)
+![Ürün Görsel 2](Sprint2_Screenshots/ÜrünGörsel-2.jpeg)
+![Ürün Görsel 3](Sprint2_Screenshots/ÜrünGörsel-3.jpeg)
+![Ürün Görsel 4](Sprint2_Screenshots/ÜrünGörsel-4.jpeg)
+![Ürün Görsel 5](Sprint2_Screenshots/ÜrünGörsel-5.jpeg)
+![Ürün Görsel 6](Sprint2_Screenshots/ÜrünGörsel-6.jpeg)
+![Ürün Görsel 7](Sprint2_Screenshots/ÜrünGörsel-7.jpeg)
+![Ürün Görsel 8](Sprint2_Screenshots/ÜrünGörsel-8.jpeg)
+![Ürün Görsel 9](Sprint2_Screenshots/ÜrünGörsel-9.jpeg)
 
 
 **Sprint Review**
