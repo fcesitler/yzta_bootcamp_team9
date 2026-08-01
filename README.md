@@ -360,10 +360,13 @@ Sprint Review katılımcıları: Zeynep İbiş, Rumeysa Songür, Furkan Çeşitl
 - Proje boyunca (Sprint 1–Sprint 3) benimsenen çevik (Agile) çalışma yaklaşımı, düzenli ekip iletişimi, sprint bazlı planlama, değişen gereksinimlere hızlı uyum sağlanması ve sürekli geri bildirim mekanizması sayesinde projenin zamanında ve hedeflenen kapsamda tamamlanmasına önemli katkı sağlamıştır.
 - Son teslim öncesinde kalan çalışmalar (README dokümantasyonunun tamamlanması, tanıtım videosunun son hâline getirilmesi ve GitHub deposunun güncellenmesi) proje kapanışı için önceliklendirilmiştir.
 
+</details>
+
+
+
 <details>
 <summary><h2>Ürün Tanıtım Videosu</h2></summary>
 
-[![Hallederiz Tanıtım Videosu](Sprint3_Screenshots/video-thumbnail.jpeg)](VIDEO_LINKI_BURAYA)
+[![Hallederiz Tanıtım Videosu](Sprint3_Screenshots/video-thumbnail.jpeg)](https://www.youtube.com/watch?v=mlfMc6E60uo)
 
 </details>
-
