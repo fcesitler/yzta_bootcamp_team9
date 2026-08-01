@@ -298,7 +298,7 @@ Backlog'un toplam 80 puan olarak korunabilmesi amacıyla, kapsamı Sprint 2'de t
 
 *## Ürün Geliştirme Listesi URL'si**
 
-Trello Panosu
+[Trello Panosu](https://trello.com/b/mn6hZJ0Y/ai-sdr-hallederiz-team-9-sprint-3)
 
 
 **Daily Scrum Notları**
@@ -307,15 +307,11 @@ Trello Panosu
 Ekip, Sprint 3 boyunca WhatsApp üzerinden düzenli günlük durum güncellemeleri (check-in) gerçekleştirmiştir. Ayrıca, ürünün son geliştirmelerinin değerlendirilmesi, kullanıcı arayüzünün nihai hâlinin belirlenmesi ve canlıya alınmadan önce son kararların verilmesi amacıyla Zoom üzerinden bir ekip toplantısı düzenlenmiştir.
 
 
-[Sprint 3 Daily Scrum Ekran Görüntüleri]
-
-Daily Scrum 1 Daily Scrum 2 Daily Scrum 3 Daily Scrum 4
-
-
 **Sprint Board Updates**
 
-Trello Board 1 Trello Board 2 Trello Board 3 Trello Board 4
-
+![Trello Board 1](Sprint3_Screenshots/PM-3.1.png)
+![Trello Board 2](Sprint3_Screenshots/PM-3.2.png)
+![Trello Board 3](Sprint3_Screenshots/PM-3.3.png)
 
 
 **Ürün Durumu**
