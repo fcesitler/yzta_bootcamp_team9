@@ -328,15 +328,15 @@ Otomasyon altyapısı, Make platformundaki premium aboneliğin sona ermesi neden
 
 Backlog kapsamında planlanan geliştirmelerden biri olan Gemini tabanlı ürün içi yardımcı, başarıyla entegre edilmiş ve çalışır durumda doğrulanmıştır. Bununla birlikte sistem yalnızca Türkçe değil, İngilizce dilinde de hizmet verecek şekilde çok dilli destek kazanmıştır.
 
-![Ürün Görsel 1](Sprint3%20Screenshots/ÜrünGörsel-1.jpeg)
-![Ürün Görsel 2](Sprint3%20Screenshots/ÜrünGörsel-2.jpeg)
-![Ürün Görsel 3](Sprint3%20Screenshots/ÜrünGörsel-3.jpeg)
-![Ürün Görsel 4](Sprint3%20Screenshots/ÜrünGörsel-4.jpeg)
-![Ürün Görsel 5](Sprint3%20Screenshots/ÜrünGörsel-5.jpeg)
-![Ürün Görsel 6](Sprint3%20Screenshots/ÜrünGörsel-6.jpeg)
-![Ürün Görsel 7](Sprint3%20Screenshots/ÜrünGörsel-7.jpeg)
-![Ürün Görsel 8](Sprint3%20Screenshots/ÜrünGörsel-8.png)
-![Ürün Görsel 9](Sprint3%20Screenshots/ÜrünGörsel-9.png)
+![Ürün Görsel 1](Sprint3_Screenshots/ÜrünGörsel-1.jpeg)
+![Ürün Görsel 2](Sprint3_Screenshots/ÜrünGörsel-2.jpeg)
+![Ürün Görsel 3](Sprint3_Screenshots/ÜrünGörsel-3.jpeg)
+![Ürün Görsel 4](Sprint3_Screenshots/ÜrünGörsel-4.jpeg)
+![Ürün Görsel 5](Sprint3_Screenshots/ÜrünGörsel-5.jpeg)
+![Ürün Görsel 6](Sprint3_Screenshots/ÜrünGörsel-6.jpeg)
+![Ürün Görsel 7](Sprint3_Screenshots/ÜrünGörsel-7.jpeg)
+![Ürün Görsel 8](Sprint3_Screenshots/ÜrünGörsel-8.png)
+![Ürün Görsel 9](Sprint3_Screenshots/ÜrünGörsel-9.png)
 
 
 **Sprint Review**
