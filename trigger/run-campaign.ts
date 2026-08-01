@@ -177,6 +177,12 @@ const CANDIDATE_MULTIPLIER = 4;
 const PIPELINE_CONCURRENCY = 10;
 // Apollo bulk_match tek istekte en fazla 10 kayıt kabul eder
 const APOLLO_MATCH_CHUNK = 10;
+// Apollo search sayfa başına en fazla 100 kayıt döndürür.
+const APOLLO_PER_PAGE = 100;
+// Sayfa derinliği tavanı: 5 sayfa = 500 aday. Arama 0 kredi olduğu için sayfalamanın
+// maliyeti yok, ama Apollo'nun sayfa derinliği limitine dayanmamak ve tek kampanyanın
+// dakikalarca sayfa çevirmesini önlemek için üst sınır konuyor.
+const APOLLO_MAX_PAGES = 5;
 
 type ApolloParams = {
   person_titles: string[];
@@ -675,9 +681,7 @@ async function searchApolloPeople(
     return [];
   }
 
-  const body: Record<string, unknown> = {
-    page: 1,
-    per_page: Math.min(100, limit),
+  const baseBody: Record<string, unknown> = {
     // Yalnız doğrulanmış e-postası olan kişileri getir → enrich isabet oranı yükselir
     contact_email_status: ["verified"],
     ...(params.person_titles.length && { person_titles: params.person_titles }),
@@ -722,42 +726,63 @@ async function searchApolloPeople(
 
   logger.info("Apollo arama başlıyor (0 kredi)", { path: APOLLO_SEARCH_PATH, limit });
 
-  const res = await fetchWithRetry(`${APOLLO_BASE}/${APOLLO_SEARCH_PATH}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-api-key": apiKey },
-    body: JSON.stringify(body),
-  });
+  // Arama 0 kredi olduğu için sayfalamak BEDAVA. Öncesinde yalnız page:1 isteniyordu
+  // ve per_page 100'de tavanlandığı için, 25'ten fazla lead hedeflendiğinde aday
+  // havuzu sessizce 100'de tıkanıyordu — CANDIDATE_MULTIPLIER (4x) ile amaçlanan
+  // "geniş havuzdan en iyileri seç" avantajı kayboluyor, kredi daha kötü adaylara
+  // harcanıyordu.
+  const out: ApolloCandidate[] = [];
+  let totalEntries: number | undefined;
 
-  if (!res.ok) {
-    const errText = await res.text();
-    logger.error("Apollo arama başarısız", { status: res.status, body: errText.slice(0, 500) });
-    return [];
-  }
+  for (let page = 1; page <= APOLLO_MAX_PAGES && out.length < limit; page++) {
+    const res = await fetchWithRetry(`${APOLLO_BASE}/${APOLLO_SEARCH_PATH}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey },
+      body: JSON.stringify({ ...baseBody, page, per_page: APOLLO_PER_PAGE }),
+    });
 
-  const data = (await res.json()) as {
-    people?: Array<Record<string, unknown>>;
-    total_entries?: number;
-  };
-  const people = data.people ?? [];
-  logger.info(
-    `Apollo ${people.length} aday döndürdü (toplam eşleşme: ${data.total_entries ?? "?"}, kredi harcanmadı)`
-  );
+    if (!res.ok) {
+      const errText = await res.text();
+      logger.error("Apollo arama başarısız", {
+        status: res.status,
+        page,
+        body: errText.slice(0, 500),
+      });
+      // İlk sayfa patladıysa elde bir şey yok; sonraki sayfalarda toplananı koru.
+      break;
+    }
 
-  return people
-    .map((p): ApolloCandidate | null => {
+    const data = (await res.json()) as {
+      people?: Array<Record<string, unknown>>;
+      total_entries?: number;
+    };
+    const people = data.people ?? [];
+    totalEntries ??= data.total_entries;
+
+    for (const p of people) {
       const id = (p.id as string) || "";
-      if (!id) return null;
+      if (!id) continue;
+      // Apollo e-postası olmayanı baştan söylüyor — bunlara kredi harcamayalım
+      if (p.has_email === false) continue;
       const org = p.organization as Record<string, unknown> | undefined;
-      return {
+      out.push({
         apollo_id: id,
         first_name: (p.first_name as string) || "",
         title: (p.title as string) || null,
         organization_name: (org?.name as string) || "Bilinmeyen",
-        // Apollo e-postası olmayanı baştan söylüyor — bunlara kredi harcamayalım
-        has_email: p.has_email !== false,
-      };
-    })
-    .filter((c): c is ApolloCandidate => c !== null && c.has_email);
+        has_email: true,
+      });
+    }
+
+    // Dolu olmayan sayfa geldiyse sonuç bitmiştir, sonraki sayfayı istemeye gerek yok.
+    if (people.length < APOLLO_PER_PAGE) break;
+  }
+
+  logger.info(
+    `Apollo ${out.length} aday döndürdü (toplam eşleşme: ${totalEntries ?? "?"}, kredi harcanmadı)`
+  );
+
+  return out.slice(0, limit);
 }
 
 // ADIM 2 — Ön skorlama. Yalnız search metadata'sıyla, TEK Claude çağrısında.
@@ -1146,6 +1171,13 @@ type ScoreResult = {
 // Onay öncesi taslak zaten insan gözden geçirmesinden geçiyor, o yüzden eşiği gevşetmek
 // "yanlış lead'e mail gitmesi" değil, "gözden geçirilecek taslak sayısının artması" riski taşıyor.
 const ICP_FIT_PASS = 75;
+
+// Araştırma öncesi ön eleme eşiği. Bilerek nihai eşikten (75) düşük tutuldu:
+// bu noktada elimizde yalnız Apollo'nun ham sektör etiketi var; araştırmadan gelen
+// sektör bilgisi bazen daha isabetli çıkıyor ve sınırdaki adayı yukarı çekebiliyor.
+// Aradaki 15 puanlık boşluk o adaylara ikinci şans bırakıyor — buranın altındakiler
+// ise araştırmadan sonra da 75'i geçemeyecek kadar uzak.
+const ICP_FIT_PRE_GATE = 60;
 
 // icpStr'e ICP'nin gerçek "aranan alıcı sektörü" bağlamını ekler. ICP.sector genelde
 // SATTIĞIMIZ ürünün sektörü (ör. "Wood, Timber") — hedef şirketlerin sektörü bu DEĞİL,
@@ -1599,7 +1631,46 @@ export const runCampaign = task({
       const orgName = contact.organization?.name || contact.name;
 
       try {
-        // RESEARCH
+        // ÖN KAPI — araştırma YAPILMADAN, yalnız Apollo enrichment verisiyle ICP uyumu.
+        // icpFit zaten sektör/büyüklük/konum/unvana bakıyor ve bunların hepsi
+        // enrichment'tan geliyor; araştırma sadece whyNow (sinyal) için gerekli.
+        // Öncesinde sıra "araştır → skorla → eleyeceksen ele" idi: elenen her lead için
+        // Firecrawl + Tavily + 600 token'lık Claude çağrısı zaten harcanmış oluyordu.
+        const preResearch = fallbackResearch(contact);
+        const preIcpFit = await scoreIcpFit(contact, preResearch, icpFitContext);
+
+        if (preIcpFit < ICP_FIT_PRE_GATE) {
+          await log(
+            db, campaignId, null, ownerId, "score", "completed",
+            `${orgName}: ICP uyumu ${preIcpFit}/100 — araştırma yapılmadan elendi.`
+          );
+          await db.from("leads").insert({
+            campaign_id: campaignId,
+            owner_id: ownerId,
+            company: orgName,
+            initials: orgName.slice(0, 2).toUpperCase(),
+            tint,
+            contact: contact.name || null,
+            title: contact.title || null,
+            email: contact.email || null,
+            linkedin_url: contact.linkedin_url || null,
+            apollo_id: contact.apollo_id ?? null,
+            stage: "low_score",
+            score: preIcpFit,
+            research: {
+              industry: preResearch.industry,
+              size: preResearch.size,
+              location: preResearch.location,
+              website: contact.organization?.website_url ?? null,
+              whyNow: "ICP uyumu eşiğin altında kaldığı için araştırma yapılmadı.",
+              signalStrength: 0,
+            },
+            draft_email: null,
+          });
+          return;
+        }
+
+        // RESEARCH — yalnız ön kapıyı geçenler için
         await log(db, campaignId, null, ownerId, "research", "started", `${orgName} araştırılıyor...`);
         const research = await researchCompany(contact, signalsStr);
         await log(db, campaignId, null, ownerId, "research", "completed", `"${research.whyNow.slice(0, 80)}"`);
