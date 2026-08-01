@@ -735,10 +735,14 @@ async function searchApolloPeople(
   let totalEntries: number | undefined;
 
   for (let page = 1; page <= APOLLO_MAX_PAGES && out.length < limit; page++) {
+    // Kalan ihtiyaç kadar iste: küçük havuzlarda 100'lük sayfa çekmek gereksiz veri
+    // (ve yanıltıcı log) üretiyordu.
+    const want = Math.min(APOLLO_PER_PAGE, limit - out.length);
+
     const res = await fetchWithRetry(`${APOLLO_BASE}/${APOLLO_SEARCH_PATH}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey },
-      body: JSON.stringify({ ...baseBody, page, per_page: APOLLO_PER_PAGE }),
+      body: JSON.stringify({ ...baseBody, page, per_page: want }),
     });
 
     if (!res.ok) {
@@ -774,8 +778,8 @@ async function searchApolloPeople(
       });
     }
 
-    // Dolu olmayan sayfa geldiyse sonuç bitmiştir, sonraki sayfayı istemeye gerek yok.
-    if (people.length < APOLLO_PER_PAGE) break;
+    // İstenenden az geldiyse sonuç bitmiştir, sonraki sayfayı istemeye gerek yok.
+    if (people.length < want) break;
   }
 
   logger.info(
