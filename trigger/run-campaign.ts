@@ -118,6 +118,13 @@ type Contact = {
     estimated_num_employees: number | null;
     city: string | null;
     country: string | null;
+    // Apollo'nun firma etiketleri. Enrichment yanıtında ZATEN geliyor (ek maliyet yok)
+    // ama daha önce hiç kullanılmıyordu. Sektör alanı çoğu şirkette aynı çıkıyor
+    // (46 firmalık örneklemde 37'si "information technology & services"), etiketler ise
+    // ayırt edici. Skorlama prompt'una eklendiğinde (2026-08-02, 45 firmalık etiketli
+    // örneklem) eşiği geçen ajans sayısı 13/13 → 6/13'e indi, gerçek SaaS'larda kayıp
+    // OLMADI (28/32 sabit kaldı).
+    keywords: string[];
   } | null;
 };
 
@@ -419,7 +426,12 @@ function resolveSectorMapping(sector: string | null | undefined): { keywords: st
   if (s.includes("sağlık") || s.includes("health"))
     return { keywords: ["Hospitals and Health Care", "Technology, Information and Internet", "Medical and Diagnostic Laboratories"], matched: true };
   if (s.includes("saas") || s.includes("yazılım") || s.includes("software"))
-    return { keywords: ["Software Development", "IT Services and IT Consulting", "Technology, Information and Internet"], matched: true };
+    // 2026-08-02 ölçümü: "IT Services and IT Consulting" etiketi havuza yazılım
+    // AJANSLARINI (müşteriye geliştirme hizmeti satan firmalar) çekiyordu — 20 kişilik
+    // rastgele örneklemde gerçek SaaS oranı %60'a düşmüştü. Bu etiket çıkarılıp "saas"
+    // eklendiğinde aynı ölçüm %85'e çıktı. Ajanslar skorlamada da ayırt edilemiyordu
+    // (88 puan alıp 75 eşiğini geçiyorlardı), o yüzden çözüm arama tarafında.
+    return { keywords: ["saas", "Software Development", "Technology, Information and Internet"], matched: true };
   if (s.includes("tüketici") || s.includes("marka") || s.includes("retail") || s.includes("consumer"))
     return { keywords: ["Consumer Services", "Retail", "Advertising Services", "Marketing Services"], matched: true };
   if (s.includes("ajans") || s.includes("agency") || s.includes("reklam"))
@@ -606,6 +618,11 @@ type ClaudeApolloParams = {
   person_seniorities: string[];
   q_organization_keyword_tags: string[];
   organization_num_employees_ranges: string[];
+  // ICP'nin "sektör" alanı BİZİM SATTIĞIMIZ ürünü mü tarif ediyor (kereste ihracatçısı
+  // "Wood, Timber" yazar) yoksa doğrudan HEDEF şirketlerin sektörünü mü ("SaaS")?
+  // İlkinde hedef, o ürünü SATIN ALAN sektörlerdir. Eskiden bu karar isBuyerSideSector()
+  // içinde kereste/wood/timber olarak HARDCODE'du — yalnız tek bir müşteri için çalışıyordu.
+  sectorIsOwnProduct: boolean;
 };
 
 // Claude ile ICP metninden Apollo arama parametreleri çıkar.
@@ -619,31 +636,55 @@ async function extractApolloParams(
     person_seniorities: ["owner", "founder", "c_suite", "vp", "head", "director"],
     q_organization_keyword_tags: [],
     organization_num_employees_ranges: ["11,20", "21,50", "51,100", "101,200"],
+    sectorIsOwnProduct: false,
   };
+
+  // Sinyal seçilmediğinde prompt'a sinyal listesi ENJEKTE EDİLMEZ. Eskiden boş değer
+  // "büyüme, işe alım, yeni ürün" yedeğine düşüyordu ve bu, kullanıcının seçmediği
+  // sinyalleri arama anahtar kelimesine çeviriyordu (3/3 test çalıştırmasında "growth",
+  // "hiring", "product launch" gibi çöp keyword'ler üretildi — havuzu bulandırıyor).
+  const signalLine = signals?.trim() ? `\nSinyaller: ${signals}` : "";
 
   try {
     const msg = await getAnthropic().messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 400,
+      max_tokens: 500,
       messages: [
         {
           role: "user",
           content: `ICP açıklamasından Apollo.io People Search parametreleri çıkar.
+Apollo veritabanı İNGİLİZCEDİR — çıktıdaki TÜM değerler İngilizce olmalı.
 
-ICP: ${icp}
-Sinyaller: ${signals || "büyüme, işe alım, yeni ürün"}
+ICP: ${icp}${signalLine}
+
+ÖNEMLİ — "Sektör" alanının yorumu iki türlü olabilir:
+(a) HEDEF şirketlerin sektörü. Yazılım/hizmet/dikey adı gibi görünüyorsa budur.
+    Örnek: "SaaS", "İnşaat", "sağlık teknolojisi", "e-ticaret", "dijital ajans".
+(b) BİZİM SATTIĞIMIZ ürünün sektörü. Hammadde, ürün, malzeme veya bileşen adı gibi
+    görünüyorsa budur — bu durumda hedef, o ürünü SATIN ALAN sektörlerdir.
+    Örnek: "Kereste" satan biri mobilya üreticisi, inşaat firması ve yapı malzemeleri
+    toptancısı arar; "ambalaj" satan biri gıda/kozmetik üreticisi arar.
 
 Kurallar:
+- sector_is_own_product: (b) ise true, (a) ise false.
+- organization_keywords: HEDEF şirketleri tanımlayan 3-6 İNGİLİZCE anahtar kelime.
+  * Türkçe girdiyi mutlaka ÇEVİR ("İnşaat" → "construction", "sağlık" → "healthcare").
+    Çıktıda Türkçe kelime BULUNMASIN — Apollo Türkçe etiketle neredeyse hiç eşleşmiyor.
+  * (b) durumunda buraya ALICI sektörlerini yaz, ürünün kendi sektörünü YAZMA
+    (aksi halde arama rakipleri getirir).
+  * Hedef kendi ürününü satan şirketlerse, hizmet/ajans çağrıştıran kelimeler
+    ("IT services", "consulting", "agency", "outsourcing", "software development
+    services") EKLEME — bunlar müşteriye hizmet satan ajansları havuza çeker.
 - person_seniorities için YALNIZCA şu değerler (harf harf aynı): "owner", "founder", "c_suite", "partner", "vp", "head", "director", "manager", "senior", "entry", "intern"
 - organization_num_employees_ranges için YALNIZCA şu format: "1,10", "11,20", "21,50", "51,100", "101,200", "201,500", "501,1000", "1001,2000", "2001,5000", "5001,10000", "10001"
-- person_titles: unvan adları (İngilizce tercih et — Apollo veritabanı İngilizce)
-- q_organization_keyword_tags: firma tanımlayan serbest anahtar kelimeler
+- person_titles: İngilizce unvan adları
 
 Sadece JSON döndür:
 {
+  "sector_is_own_product": false,
+  "organization_keywords": ["saas", "b2b software"],
   "person_titles": ["CEO", "Founder"],
   "person_seniorities": ["owner", "founder", "c_suite"],
-  "q_organization_keyword_tags": ["saas", "b2b"],
   "organization_num_employees_ranges": ["11,20", "21,50"]
 }`,
         },
@@ -653,16 +694,23 @@ Sadece JSON döndür:
     const text = (msg.content[0] as { type: string; text: string }).text;
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return fallback;
-    const parsed = JSON.parse(jsonMatch[0]) as Partial<ClaudeApolloParams>;
+    const parsed = JSON.parse(jsonMatch[0]) as {
+      sector_is_own_product?: boolean;
+      organization_keywords?: string[];
+      person_titles?: string[];
+      person_seniorities?: string[];
+      organization_num_employees_ranges?: string[];
+    };
     return {
       person_titles: parsed.person_titles?.length ? parsed.person_titles : fallback.person_titles,
       person_seniorities: parsed.person_seniorities?.length
         ? parsed.person_seniorities
         : fallback.person_seniorities,
-      q_organization_keyword_tags: parsed.q_organization_keyword_tags ?? [],
+      q_organization_keyword_tags: parsed.organization_keywords ?? [],
       organization_num_employees_ranges: parsed.organization_num_employees_ranges?.length
         ? parsed.organization_num_employees_ranges
         : fallback.organization_num_employees_ranges,
+      sectorIsOwnProduct: parsed.sector_is_own_product === true,
     };
   } catch (e) {
     logger.warn("Apollo parametre çıkarımı başarısız, varsayılan kullanılıyor", { error: e });
@@ -922,6 +970,10 @@ async function enrichApolloPeople(
             estimated_num_employees: (org.estimated_num_employees as number) ?? null,
             city: (org.city as string) || null,
             country: (org.country as string) || null,
+            // Uzun listeler prompt'u şişiriyor; ilk 12 etiket ayrım için fazlasıyla yeterli.
+            keywords: Array.isArray(org.keywords)
+              ? (org.keywords as string[]).slice(0, 12)
+              : [],
           },
         });
       });
@@ -1019,6 +1071,8 @@ async function searchApify(
       estimated_num_employees: parseEmployeeCount(p.organizationSize as string),
       city: (p.organizationCity as string) || null,
       country: (p.organizationCountry as string) || null,
+      // Apify actor'ü firma etiketi döndürmüyor — skorlama bu alan boşken de çalışır.
+      keywords: [],
     },
   }));
 }
@@ -1227,7 +1281,11 @@ Değerlendirilecek şirket: ${contact.organization?.name}
 Şirket sektörü: ${research.industry}
 Şirket büyüklüğü: ${research.size}
 Konum: ${research.location}
-Kişi: ${contact.name}, ünvan: ${contact.title}
+Kişi: ${contact.name}, ünvan: ${contact.title}${
+            contact.organization?.keywords?.length
+              ? `\nŞirketin anahtar kelimeleri: ${contact.organization.keywords.join(", ")}`
+              : ""
+          }
 
 Puanlama rehberi:
 - 85-100: sektör aranan (alıcı) sektörlerden biriyle net eşleşiyor VE rol net eşleşiyor VE büyüklük/coğrafya uygun
@@ -1464,40 +1522,57 @@ export const runCampaign = task({
     const icpStr = icpToText(c.icp);
     const signalsStr = signalsToText(c.signals);
     const icpRecord = typeof c.icp === "object" && c.icp ? (c.icp as Record<string, string>) : {};
-    // Skorlama ve Apollo araması ikisi de aynı sektör→alıcı eşlemesini kullanır —
-    // burada bir kez çözülüp paylaşılıyor (bkz. buildIcpFitContext, scoreIcpFit).
-    const sectorMapping = resolveSectorMapping(icpRecord.sector);
-    // Alıcı-tarafı bağlamı YALNIZ ICP.sector'ün "sattığımız ürün" olduğu sektörlerde
-    // verilir (bkz. isBuyerSideSector). Diğer kampanyalarda ham icpStr kullanılır —
-    // aksi halde skorlama prompt'u kendi kendisiyle çelişir.
-    const buyerIndustries = isBuyerSideSector(icpRecord.sector) ? sectorMapping.keywords : [];
-    const icpFitContext = buildIcpFitContext(icpStr, icpRecord, buyerIndustries);
 
     // Hedef lead sayısı — çağıran ne isterse o. (Eskiden Math.max(100, …) ile
     // taban 100'e zorlanıyordu; Apollo'da bu kampanya başına 100 kredi demekti.)
     const targetLeads = Math.min(100, Math.max(1, payload.max_leads ?? 25));
     const useApollo = (process.env.LEAD_SOURCE ?? "apollo") === "apollo";
 
+    // Sektör→anahtar kelime çözümü. Kürate tablo (resolveSectorMapping) yalnız 7 kalıbı
+    // tanıyor; tanımadığı her sektörde girdi HAM haliyle Apollo'ya gidiyordu. Türkçe
+    // girdide bu ölümcül: "İnşaat" 21 kişi bulurken "Construction" 2.023 kişi buluyor (96×).
+    // Artık kürate tablo eşleşmezse Claude'un İngilizceye çevirdiği keyword'ler kullanılıyor.
+    const sectorMapping = resolveSectorMapping(icpRecord.sector);
+    const extracted = useApollo
+      ? await extractApolloParams(icpStr, signalsStr)
+      : null;
+
+    // Alıcı-tarafı ("sattığımız ürünü SATIN ALAN sektörler") kararı: kürate tablodaki
+    // hardcode kereste kontrolü VEYA Claude'un yorumu. Böylece kereste dışındaki
+    // hammadde/ürün ICP'lerinde de doğru çalışıyor.
+    const sectorIsOwnProduct =
+      isBuyerSideSector(icpRecord.sector) || extracted?.sectorIsOwnProduct === true;
+
+    const searchKeywords = sectorMapping.matched
+      ? sectorMapping.keywords
+      : extracted?.q_organization_keyword_tags?.length
+        ? extracted.q_organization_keyword_tags
+        : sectorMapping.keywords;
+
+    // Skorlamaya "aranan gerçek alıcı sektörleri" bağlamı, yalnız (b) durumunda verilir —
+    // aksi halde prompt kendi kendisiyle çelişiyor (bkz. buildIcpFitContext).
+    const buyerIndustries = sectorIsOwnProduct ? searchKeywords : [];
+    const icpFitContext = buildIcpFitContext(icpStr, icpRecord, buyerIndustries);
+
     // ---------- FIND ----------
     let contacts: Contact[] = [];
 
-    if (useApollo) {
+    if (useApollo && extracted) {
       await log(db, campaignId, null, ownerId, "find", "started", "ICP'e uygun adaylar Apollo'da aranıyor...");
 
-      const extracted = await extractApolloParams(icpStr, signalsStr);
       const locations = geographyToApolloLocations(icpRecord.geography);
+      logger.info("Apollo arama parametreleri çözüldü", {
+        keywords: searchKeywords,
+        sektorKendiUrunumuz: sectorIsOwnProduct,
+        kurateEslesme: sectorMapping.matched,
+      });
 
       const baseParams: ApolloParams = {
         person_titles: extracted.person_titles,
         person_seniorities: extracted.person_seniorities,
         person_locations: locations,
         organization_locations: locations,
-        // Sector bilinen bir kalıba uyduysa (ör. kereste → alıcı sektörleri), Claude'un
-        // icpStr'den bağımsız çıkardığı ham keyword'leri EKLEME — aksi halde "wood"/"timber"
-        // gibi rakip-sektör kelimeleri geri sızar ve alıcı eşlemesini sulandırır.
-        q_organization_keyword_tags: sectorMapping.matched
-          ? sectorMapping.keywords.slice(0, 10)
-          : [...sectorMapping.keywords, ...extracted.q_organization_keyword_tags].slice(0, 10),
+        q_organization_keyword_tags: searchKeywords.slice(0, 10),
         organization_num_employees_ranges: extracted.organization_num_employees_ranges,
       };
 
