@@ -86,7 +86,9 @@ HALLEDERİZ - Team 9
 <details>
 <summary><h2>Sprint 1</h2></summary>
 
+
 **# SPRİNT 1**
+
 
 
 **\*\*Backlog düzeni ve Hikaye seçimleri\*\***
@@ -191,7 +193,10 @@ Sprint Review katılımcıları: Zeynep İbiş, Rumeysa Songür, Furkan Çeşitl
 
 <details>
 <summary><h2>Sprint 2</h2></summary>
+
+ 
 **# SPRİNT 2**
+
 
 
 **Backlog Dağıtma Mantığı**
@@ -278,7 +283,10 @@ Sprint Review katılımcıları: Zeynep İbiş, Rumeysa Songür, Furkan Çeşitl
 
 <details>
 <summary><h2>Sprint 3</h2></summary>
+
+ 
 **# SPRİNT 3**
+
 
 
 **Backlog Dağıtma Mantığı**
