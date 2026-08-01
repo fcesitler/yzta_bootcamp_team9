@@ -719,9 +719,14 @@ Sadece JSON döndür:
 }
 
 // ADIM 1 — Apollo People Search. 0 KREDİ harcar; e-postalar maskeli döner.
+// knownIds: daha önce işlenmiş apollo_id'ler. Arama SIRASINDA elenirler ki sayfalama
+// "limit kadar YENİ aday" bulana dek devam etsin. Eskiden dedupe aramadan SONRA
+// yapılıyordu: her run aynı ilk sayfayı çekip tamamı tekrar çıkınca kampanya boş
+// dönüyordu (gözlem: 5 lead istendi → 4'ü tekrar → elde 1 lead kaldı).
 async function searchApolloPeople(
   params: ApolloParams,
-  limit: number
+  limit: number,
+  knownIds: Set<string> = new Set()
 ): Promise<ApolloCandidate[]> {
   const apiKey = process.env.APOLLO_API_KEY;
   if (!apiKey) {
@@ -782,10 +787,17 @@ async function searchApolloPeople(
   const out: ApolloCandidate[] = [];
   let totalEntries: number | undefined;
 
+  // Aynı kişi iki farklı sayfada dönebiliyor (ölçüldü: sayfa 1 ile sayfa 2 arasında
+  // %6 örtüşme). Enrichment'a mükerrer kayıt gitmesin diye run içinde de takip edilir.
+  const seen = new Set<string>();
+  let skippedKnown = 0;
+
   for (let page = 1; page <= APOLLO_MAX_PAGES && out.length < limit; page++) {
-    // Kalan ihtiyaç kadar iste: küçük havuzlarda 100'lük sayfa çekmek gereksiz veri
-    // (ve yanıltıcı log) üretiyordu.
-    const want = Math.min(APOLLO_PER_PAGE, limit - out.length);
+    // Bilinen adaylar elenerek ilerlediğimiz için sayfayı DAİMA dolu iste: kalan
+    // ihtiyaç kadar istersek, gelenlerin çoğu tekrar çıktığında sayfa boşa gider.
+    const want = knownIds.size > 0
+      ? APOLLO_PER_PAGE
+      : Math.min(APOLLO_PER_PAGE, limit - out.length);
 
     const res = await fetchWithRetry(`${APOLLO_BASE}/${APOLLO_SEARCH_PATH}`, {
       method: "POST",
@@ -812,8 +824,12 @@ async function searchApolloPeople(
     totalEntries ??= data.total_entries;
 
     for (const p of people) {
+      if (out.length >= limit) break;
       const id = (p.id as string) || "";
-      if (!id) continue;
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      // Daha önce işlenmiş kişi: enrichment'a hiç gitmesin (kredi tasarrufu).
+      if (knownIds.has(id)) { skippedKnown++; continue; }
       // Apollo e-postası olmayanı baştan söylüyor — bunlara kredi harcamayalım
       if (p.has_email === false) continue;
       const org = p.organization as Record<string, unknown> | undefined;
@@ -831,7 +847,8 @@ async function searchApolloPeople(
   }
 
   logger.info(
-    `Apollo ${out.length} aday döndürdü (toplam eşleşme: ${totalEntries ?? "?"}, kredi harcanmadı)`
+    `Apollo ${out.length} YENİ aday döndürdü (toplam eşleşme: ${totalEntries ?? "?"}` +
+      `${skippedKnown > 0 ? `, ${skippedKnown} tanınan aday atlandı` : ""}, kredi harcanmadı)`
   );
 
   return out.slice(0, limit);
@@ -951,6 +968,14 @@ async function enrichApolloPeople(
 
         const org = (m.organization ?? {}) as Record<string, unknown>;
         const domain = org.primary_domain as string | undefined;
+
+        // Firması çözülemeyen kayıt: araştırma yapacak site yok, skorlama sektör
+        // göremiyor, taslak "Bilinmeyen" şirkete yazılıyor. (46 kişilik denetim
+        // örnekleminde 1 tane çıktı.) Kredisi zaten harcandı, ama lead açmaya değmez.
+        if (!org.name && !base.organization_name) {
+          logger.info("Firma bilgisi olmayan kayıt atlandı", { apollo_id: base.apollo_id });
+          return;
+        }
 
         enriched.push({
           // Enrich güncel işvereni ve tam adı döndürür —
@@ -1576,13 +1601,30 @@ export const runCampaign = task({
         organization_num_employees_ranges: extracted.organization_num_employees_ranges,
       };
 
-      // 1) Ara — 0 kredi. Önce satın-alma sinyali filtreleriyle dene:
+      // 1) DAHA ÖNCE İŞLENMİŞ ADAYLAR — arama ÖNCESİ çekilir (0 kredi).
+      // Eskiden dedupe aramadan SONRA yapılıyordu: arama hep aynı ilk sayfayı çekiyor,
+      // tamamı tanınan çıkınca kampanya boş dönüyordu. Artık liste aramaya GİRDİ olarak
+      // veriliyor ve sayfalama "limit kadar YENİ aday" bulana dek ilerliyor.
+      // NOT: apollo_id kolonu sonradan eklendi; eski lead'lerde null olduğu için
+      // aşağıdaki e-posta bazlı dedupe emniyet ağı olarak KORUNUYOR.
+      const { data: knownRows } = await db
+        .from("leads")
+        .select("apollo_id")
+        .eq("owner_id", ownerId)
+        .not("apollo_id", "is", null);
+      const knownApolloIds = new Set((knownRows ?? []).map((r) => r.apollo_id as string));
+
+      // 2) Ara — 0 kredi. Önce satın-alma sinyali filtreleriyle dene:
       // kampanyanın "signals" alanı artık Apollo'da ARAMA ANINDA uygulanıyor,
       // sonradan tahmin edilmiyor. Maliyeti yok, havuz kalitesini yükseltiyor.
       const signalFilters = signalsToApolloFilters(c.signals);
       const poolSize = targetLeads * CANDIDATE_MULTIPLIER;
 
-      let candidates = await searchApolloPeople({ ...baseParams, ...signalFilters }, poolSize);
+      let candidates = await searchApolloPeople(
+        { ...baseParams, ...signalFilters },
+        poolSize,
+        knownApolloIds
+      );
 
       // Sinyal filtreleri havuzu aşırı daraltabiliyor (funding testinde -98%).
       // Yeterli aday çıkmazsa sinyalsiz tekrar ara — kampanya boş dönmesin.
@@ -1593,40 +1635,10 @@ export const runCampaign = task({
         });
         const wider = await searchApolloPeople(
           { ...baseParams, person_not_titles: signalFilters.person_not_titles },
-          poolSize
+          poolSize,
+          knownApolloIds
         );
         if (wider.length > candidates.length) candidates = wider;
-      }
-
-      if (candidates.length === 0) {
-        await log(db, campaignId, null, ownerId, "find", "error", "Apollo'da aday bulunamadı. Kampanya parametrelerini kontrol edin.");
-        return { leads_created: 0 };
-      }
-
-      // 1.5) ENRICHMENT ÖNCESİ DEDUPE — 0 kredi.
-      // Daha önce enrich edilmiş kişiler BURADA elenmeli. Aksi halde her biri için
-      // 1 kredi harcanıp sonra aşağıdaki e-posta dedupe'unda çöpe atılıyorlar.
-      // (2026-08-01 gözlemi: 5 lead istendi → 5 kredi harcandı → 4'ü tekrar çıktı →
-      // elde 1 lead kaldı. Veritabanı büyüdükçe bu israf oranı artıyor.)
-      // NOT: apollo_id kolonu yeni eklendi; eski lead'lerde null olduğu için
-      // aşağıdaki e-posta bazlı dedupe emniyet ağı olarak KORUNUYOR.
-      const { data: knownRows } = await db
-        .from("leads")
-        .select("apollo_id")
-        .eq("owner_id", ownerId)
-        .not("apollo_id", "is", null);
-
-      const knownApolloIds = new Set((knownRows ?? []).map((r) => r.apollo_id as string));
-      if (knownApolloIds.size > 0) {
-        const beforeCount = candidates.length;
-        candidates = candidates.filter((cand) => !knownApolloIds.has(cand.apollo_id));
-        const removed = beforeCount - candidates.length;
-        if (removed > 0) {
-          logger.info("Enrichment öncesi dedupe (kredi harcanmadı)", {
-            atlanan: removed,
-            kalan: candidates.length,
-          });
-        }
       }
 
       if (candidates.length === 0) {
@@ -1637,7 +1649,7 @@ export const runCampaign = task({
         return { leads_created: 0 };
       }
 
-      // 2) Ön skorla — 0 kredi, tek Claude çağrısı
+      // 3) Ön skorla — 0 kredi, tek Claude çağrısı
       const preScores = await preScoreCandidates(candidates, icpStr);
       const ranked = candidates
         .map((cand, i) => ({ cand, score: preScores[i] }))
@@ -1650,7 +1662,7 @@ export const runCampaign = task({
         `${candidates.length} aday tarandı, en iyi ${ranked.length} tanesi zenginleştiriliyor...`
       );
 
-      // 3) Yalnız seçilenleri enrich et — lead başına 1 kredi
+      // 4) Yalnız seçilenleri enrich et — lead başına 1 kredi
       contacts = await enrichApolloPeople(ranked);
     } else {
       await log(db, campaignId, null, ownerId, "find", "started", "ICP'e uygun lead'ler Apify'da aranıyor...");
