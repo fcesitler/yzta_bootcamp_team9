@@ -80,25 +80,18 @@ HALLEDERİZ - Team 9
 
 
 
-**## Ürün Geliştirme Listesi URL'si**
-
-
-[Trello Panosu](https://trello.com/b/mn6hZJ0Y/ai-sdr-hallederiz-team-9-sprint-1)
-
-
 
 \---
 
+<details>
+<summary><h2>Sprint 1</h2></summary>
 
 
 **# SPRİNT 1**
 
 
 
-
-
 **\*\*Backlog düzeni ve Hikaye seçimleri\*\***
-
 
 
 Proje boyunca toplam 300 puanlık bir backlog hedeflenmiştir. Bu puan üç sprinte eşit değil, her sprintin doğasına göre dağıtılmıştır: Sprint 1 için 80 puan, Sprint 2 için 140 puan, Sprint 3 için 80 puan hedeflenmiştir. Sprint 1'de öncelik, ürünün vizyonunu netleştirmek, sistem mimarisini tasarlamak ve ekibin teknik/organizasyonel altyapısını kurmak olarak belirlenmiştir. 
@@ -108,11 +101,15 @@ Proje boyunca toplam 300 puanlık bir backlog hedeflenmiştir. Bu puan üç spri
 Backlog'a şu maddeler alınmıştır: proje fikri ve kazanma tezinin netleştirilmesi, 8 adımlı sistem mimarisinin tasarlanması, teknoloji yığınının belirlenmesi (Make, Claude, Supabase, Apollo, Firecrawl, Tavily, Cal.com, Next.js), ekip rollerinin netleştirilmesi, panel arayüzünün örnek verilerle tasarlanması, geliştirme standartlarının belirlenmesi ve proje yönetim altyapısının kurulması. Gerçek API entegrasyonları bilinçli olarak sonraki sprintlere planlanmıştır. Sprint 1 hedeflenen 80 puanın tamamı tamamlanmıştır.
 
 
+**## Ürün Geliştirme Listesi URL'si**
+
+
+[Trello Panosu](https://trello.com/b/mn6hZJ0Y/ai-sdr-hallederiz-team-9-sprint-1)
+
 
 
 
 **\*\*Daily Scrum\*\***
-
 
 
 Ekip üyelerinin farklı programları nedeniyle günlük toplantılar sabit bir saatte değil, WhatsApp üzerinden kısa check-in mesajlarıyla yürütülmüştür. Sprint 1 boyunca ekip, ilerlemeyi ve karar noktalarını tartışmak üzere 2 Temmuz'da bir Google Meet toplantısı gerçekleştirmiş, bu toplantıda proje mimarisi ve kod planı ekip olarak birlikte gözden geçirilmiştir. 
@@ -142,12 +139,6 @@ Sprint panosu ekran görüntüleri:
 ![Trello Board 3](Sprint1_Screenshots/PM-1.3.png)
 ![Trello Board 4](Sprint1_Screenshots/PM-1.4.png)
 
-
-### Sprint 1 - Burndown Chart
-
-![Burndown Chart](Sprint1_Screenshots/burndown-chart.png)
-
-Not: Günlük ilerleme takibi yapılmadığı için grafik yalnızca sprint başı (19 Haziran, 80 puan) ve sprint sonu (5 Temmuz, 0 puan) gerçek verilerini göstermektedir.
 
 
 **\*\*Ürün Durumu\*\*** 
@@ -196,12 +187,16 @@ Sprint Review katılımcıları: Zeynep İbiş, Rumeysa Songür, Furkan Çeşitl
 &#x20;  - Ekip içi iletişimin Sprint 2'de daha düzenli WhatsApp check-in'leriyle desteklenmesine karar verilmiştir.
 
 
-
+</details>
 \---
 
 
+<details>
+<summary><h2>Sprint 2</h2></summary>
 
+ 
 **# SPRİNT 2**
+
 
 
 **Backlog Dağıtma Mantığı**
@@ -280,11 +275,18 @@ Sprint Review katılımcıları: Zeynep İbiş, Rumeysa Songür, Furkan Çeşitl
 - Sprint 3 öncelik listesi ise: (1) Claude API ile ICP skorlama, (2) çoklu firma desteği (batch işleme), (3) panel arayüzünün gerçek veriyle bağlanması, (4) deploy, sunum ve tanıtım videosu hazırlığı.
 - Ekip içi iletişimin, Sprint 2'de olduğu gibi WhatsApp check-in'leri ve düzenli Meet toplantılarıyla (12 ve 18 Temmuz'da olduğu gibi) sürdürülmesine karar verilmiştir.
 
+
+</details>
 \---
 
 
 
+<details>
+<summary><h2>Sprint 3</h2></summary>
+
+ 
 **# SPRİNT 3**
+
 
 
 **Backlog Dağıtma Mantığı**
@@ -358,5 +360,8 @@ Sprint Review katılımcıları: Zeynep İbiş, Rumeysa Songür, Furkan Çeşitl
 - Proje boyunca (Sprint 1–Sprint 3) benimsenen çevik (Agile) çalışma yaklaşımı, düzenli ekip iletişimi, sprint bazlı planlama, değişen gereksinimlere hızlı uyum sağlanması ve sürekli geri bildirim mekanizması sayesinde projenin zamanında ve hedeflenen kapsamda tamamlanmasına önemli katkı sağlamıştır.
 - Son teslim öncesinde kalan çalışmalar (README dokümantasyonunun tamamlanması, tanıtım videosunun son hâline getirilmesi ve GitHub deposunun güncellenmesi) proje kapanışı için önceliklendirilmiştir.
 
+</details>
 
 
+[![Hallederiz Tanıtım Videosu](Sprint3_Screenshots/video-thumbnail.png)]
+(VIDEO_LINKI_BURAYA)
