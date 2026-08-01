@@ -12,6 +12,7 @@ export type LeadResearch = {
   industry?: string;
   size?: string;
   location?: string;
+  website?: string | null;
   whyNow?: string;
   draftSubject?: string;
   replyClassification?: "interested" | "objection" | "not_now" | "irrelevant";

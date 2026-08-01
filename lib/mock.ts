@@ -136,6 +136,7 @@ export type Lead = {
   contact: string;
   title: string;
   linkedin?: string | null;
+  website?: string | null;
   stage: Stage;
   score: number;
   whyNow: string;

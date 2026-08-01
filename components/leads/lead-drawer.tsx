@@ -83,6 +83,21 @@ export function LeadDrawer({
                 <p className="text-[13px] text-text-muted">
                   {lead.industry} · {lead.size} · {lead.location}
                 </p>
+                {lead.website && (
+                  <a
+                    href={
+                      lead.website.startsWith("http")
+                        ? lead.website
+                        : `https://${lead.website}`
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="block truncate text-[12px] text-text-muted hover:text-forest-700 hover:underline"
+                  >
+                    {lead.website}
+                  </a>
+                )}
               </div>
               <button
                 onClick={onClose}

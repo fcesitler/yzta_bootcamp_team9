@@ -113,6 +113,25 @@ export function LeadsView({ initialLeads = [] }: { initialLeads?: Lead[] }) {
                     <p className="truncate text-[14px] font-medium text-text-strong">
                       {lead.company}
                     </p>
+                    {lead.website ? (
+                      <a
+                        href={
+                          lead.website.startsWith("http")
+                            ? lead.website
+                            : `https://${lead.website}`
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="block truncate text-[11px] text-text-muted hover:text-forest-700 hover:underline"
+                      >
+                        {lead.website}
+                      </a>
+                    ) : (
+                      <p className="truncate text-[11px] text-text-muted">
+                        Website yok
+                      </p>
+                    )}
                     <p className="truncate text-[12px] text-text-muted">
                       {lead.industry}
                     </p>
