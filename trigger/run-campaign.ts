@@ -24,6 +24,44 @@ function getDb() {
   );
 }
 
+// Tüm Claude çağrıları aynı modeli kullanır. Tek sabit: sürüm değişince yedi ayrı
+// yeri bulmak ve birini atlayıp iki farklı modelle skorlama yapmak riski kalkıyor.
+const CLAUDE_MODEL = "claude-haiku-4-5-20251001";
+
+// Geçici hatalarda tekrar dener. Öncesinde Apollo veya Tavily'nin tek bir geçici
+// 5xx/timeout'u tüm kampanyayı sıfır lead'le döndürebiliyordu.
+// Yalnız geçici sayılan durumlar tekrarlanır: ağ hatası, 5xx, 429 (rate limit).
+// 4xx tekrarlanmaz — yanlış parametre veya geçersiz anahtar tekrar denemekle düzelmez.
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  attempts = 3
+): Promise<Response> {
+  let lastError: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(url, init);
+      if (res.status < 500 && res.status !== 429) return res;
+      // Son deneme de geçici hata verdiyse yanıtı olduğu gibi döndür —
+      // çağıranlar zaten !res.ok durumunu kendileri ele alıyor.
+      if (i === attempts - 1) return res;
+      lastError = new Error(`HTTP ${res.status}`);
+    } catch (e) {
+      lastError = e;
+      if (i === attempts - 1) throw e;
+    }
+    const waitMs = 1000 * 2 ** i;
+    logger.warn("İstek başarısız, tekrar denenecek", {
+      url: url.split("?")[0],
+      deneme: i + 1,
+      bekleme_ms: waitMs,
+      hata: String(lastError),
+    });
+    await new Promise((r) => setTimeout(r, waitMs));
+  }
+  throw lastError;
+}
+
 type Campaign = {
   id: string;
   owner_id: string;
@@ -481,7 +519,7 @@ async function extractApifyParams(icp: string, signals: string | null): Promise<
   };
 
   const msg = await getAnthropic().messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: CLAUDE_MODEL,
     max_tokens: 400,
     messages: [
       {
@@ -557,15 +595,6 @@ function geographyToApolloLocations(geography: string | null | undefined): strin
   return geographyToCountries(geography);
 }
 
-// Apify çalışan aralığı ("11 - 50") → Apollo formatı ("11,50")
-function toApolloEmployeeRange(size: string): string | null {
-  const nums = size.match(/\d+/g);
-  if (!nums) return null;
-  if (size.includes("+")) return "10001";
-  if (nums.length === 1) return `1,${nums[0]}`;
-  return `${nums[0]},${nums[1]}`;
-}
-
 type ClaudeApolloParams = {
   person_titles: string[];
   person_seniorities: string[];
@@ -588,7 +617,7 @@ async function extractApolloParams(
 
   try {
     const msg = await getAnthropic().messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: CLAUDE_MODEL,
       max_tokens: 400,
       messages: [
         {
@@ -693,7 +722,7 @@ async function searchApolloPeople(
 
   logger.info("Apollo arama başlıyor (0 kredi)", { path: APOLLO_SEARCH_PATH, limit });
 
-  const res = await fetch(`${APOLLO_BASE}/${APOLLO_SEARCH_PATH}`, {
+  const res = await fetchWithRetry(`${APOLLO_BASE}/${APOLLO_SEARCH_PATH}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": apiKey },
     body: JSON.stringify(body),
@@ -748,7 +777,7 @@ async function preScoreCandidates(
 
   try {
     const msg = await getAnthropic().messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: CLAUDE_MODEL,
       max_tokens: 2000,
       messages: [
         {
@@ -800,6 +829,11 @@ async function enrichApolloPeople(
     const chunk = candidates.slice(i, i + APOLLO_MATCH_CHUNK);
 
     try {
+      // KASITLI OLARAK retry YOK: bulk_match lead başına 1 kredi harcıyor.
+      // İstek Apollo tarafında işlendikten sonra yanıt düşerse (timeout), tekrar
+      // denemek aynı kişiler için ikinci kez kredi yakabilir. Buradaki hata zaten
+      // yalnız 10'luk bir grubu kaybettiriyor ve döngü devam ediyor — arama
+      // (0 kredi) tarafındaki retry kampanyanın tamamen boş dönmesini önlüyor.
       const res = await fetch(`${APOLLO_BASE}/people/bulk_match`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey },
@@ -990,7 +1024,7 @@ async function researchCompany(
   let newsContent = "";
   try {
     const currentYear = new Date().getFullYear();
-    const res = await fetch("https://api.tavily.com/search", {
+    const res = await fetchWithRetry("https://api.tavily.com/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1030,7 +1064,7 @@ async function researchCompany(
 (Bunlar öncelikli; ancak şirkete özgü başka somut bir gelişme varsa onu da değerlendirebilirsin.)`
     : `Aranan sinyal türü belirtilmemiş — şirkete özgü SOMUT ve GÜNCEL herhangi bir gelişmeyi değerlendir (yeni tesis/kapasite, işe alım, finansman, ürün lansmanı, ortaklık, pazar genişlemesi, sertifika/mevzuat vb.). Belirli bir sinyal türünü aramaya çalışma.`;
   const msg = await getAnthropic().messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: CLAUDE_MODEL,
     max_tokens: 600,
     messages: [
       {
@@ -1143,7 +1177,7 @@ async function scoreIcpFit(
   icpContext: string
 ): Promise<number> {
   const msg = await getAnthropic().messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: CLAUDE_MODEL,
     max_tokens: 60,
     messages: [
       {
@@ -1185,7 +1219,7 @@ Sadece JSON döndür: {"icpFit": 0-100}`,
 
 async function scoreSignalStrength(research: ResearchResult): Promise<number> {
   const msg = await getAnthropic().messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: CLAUDE_MODEL,
     max_tokens: 40,
     messages: [
       {
@@ -1305,7 +1339,7 @@ async function writeEmail(
     : null;
 
   const msg = await getAnthropic().messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: CLAUDE_MODEL,
     max_tokens: 800,
     messages: [
       {
@@ -1609,7 +1643,7 @@ export const runCampaign = task({
           return;
         }
 
-        // WRITE (yalnız skor >= 80)
+        // WRITE (yalnız ICP_FIT_PASS eşiğini geçenler)
         const emailLang = detectEmailLanguage(contact);
         await log(db, campaignId, null, ownerId, "write", "started", `${orgName} için e-posta yazılıyor (${emailLang})...`);
         const draft = await writeEmail(contact, research, campaign as Campaign, emailLang, sender);
