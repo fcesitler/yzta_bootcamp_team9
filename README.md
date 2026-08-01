@@ -287,9 +287,6 @@ Sprint Review katılımcıları: Zeynep İbiş, Rumeysa Songür, Furkan Çeşitl
 **# SPRİNT 3**
 
 
-# SPRİNT 3 (Proje Son Sprinti)
-
-
 **Backlog Dağıtma Mantığı**
 
 Sprint 3, projenin son sprinti olup toplam 300 puanlık backlog'un tamamlandığı sprinttir. Bu sprint için hedef 80 puan olarak belirlenmiştir. Backlog; Sprint 2 kapsamında ücretsiz katmanda prototipi geliştirilen özelliklerin (Claude API ile ICP skorlama ve çoklu firma desteği) tamamlanması ile ürünün üretim ortamına hazır hale getirilmesi için gerekli çalışmaların (yönetim paneli–Supabase entegrasyonu, dağıtım (deployment), dokümantasyon ve tanıtım videosu hazırlanması) bir araya getirilmesiyle oluşturulmuştur.
