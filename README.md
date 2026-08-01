@@ -296,14 +296,13 @@ Sprint sürecinde planlamayı etkileyen teknik değişiklikler backlog'a yansıt
 Backlog'un toplam 80 puan olarak korunabilmesi amacıyla, kapsamı Sprint 2'de tamamlanan pazar araştırması raporuyla büyük ölçüde örtüşen "Pazar ve Rakip Araştırması Sunumu" iş kalemi backlog'dan çıkarılmıştır. Böylece sprint kapsamı güncellenirken toplam iş yükü ve sprint hedefi sabit tutulmuştur.
 
 
-## Ürün Geliştirme Listesi URL'si*
+*## Ürün Geliştirme Listesi URL'si**
 
 Trello Panosu
 
 
 **Daily Scrum Notları**
 
-## Daily Scrum Notları
 
 Ekip, Sprint 3 boyunca WhatsApp üzerinden düzenli günlük durum güncellemeleri (check-in) gerçekleştirmiştir. Ayrıca, ürünün son geliştirmelerinin değerlendirilmesi, kullanıcı arayüzünün nihai hâlinin belirlenmesi ve canlıya alınmadan önce son kararların verilmesi amacıyla Zoom üzerinden bir ekip toplantısı düzenlenmiştir.
 
