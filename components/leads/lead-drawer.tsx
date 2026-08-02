@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { X, Sparkles, Check, Pencil, Loader2, ExternalLink } from "lucide-react";
+import { useState, useTransition } from "react";
+import { X, Sparkles, Check, Pencil, Loader2, ExternalLink, Languages } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { type Lead, type Stage, stageMeta } from "@/lib/mock";
 import { approveLead } from "@/app/(app)/campaigns/actions";
+import { translateDraft } from "@/app/(app)/leads/actions";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 
 const tintClass: Record<string, string> = {
@@ -37,11 +38,43 @@ export function LeadDrawer({
   const [isPending, startTransition] = useTransition();
   const [isEditing, setIsEditing] = useState(false);
   const [editBody, setEditBody] = useState("");
+  // Taslak alıcının dilinde yazılıyor; kullanıcı her dili bilemeyebilir.
+  // Çeviri yalnız GÖRÜNTÜLEME içindir — gönderim her zaman orijinal metinden yapılır.
+  const [translation, setTranslation] = useState<string | null>(null);
+  const [showTranslation, setShowTranslation] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
 
-  useEffect(() => {
+  // Başka bir lead açıldığında (veya taslak realtime ile güncellendiğinde) yerel
+  // durumu sıfırla. useEffect yerine render sırasında türetiliyor: effect içinde
+  // setState çağırmak fazladan bir render turu doğuruyordu (ve lint bunu hata sayıyor).
+  const resetKey = `${lead?.id ?? ""}|${lead?.draftBody ?? ""}`;
+  const [prevResetKey, setPrevResetKey] = useState(resetKey);
+  if (resetKey !== prevResetKey) {
+    setPrevResetKey(resetKey);
     setIsEditing(false);
     setEditBody(lead?.draftBody ?? "");
-  }, [lead?.id, lead?.draftBody]);
+    // Önceki lead'in çevirisini yeni lead'e taşıma.
+    setTranslation(null);
+    setShowTranslation(false);
+  }
+
+  async function handleToggleTranslation() {
+    if (!lead) return;
+    // Zaten çevrilmişse ağa çıkmadan sadece görünümü değiştir.
+    if (translation) {
+      setShowTranslation((v) => !v);
+      return;
+    }
+    setIsTranslating(true);
+    const result = await translateDraft(lead.id);
+    setIsTranslating(false);
+    if (result?.error || !result?.translation) {
+      toast.error("Çeviri yapılamadı", { description: result?.error });
+      return;
+    }
+    setTranslation(result.translation);
+    setShowTranslation(true);
+  }
 
   function handleApprove() {
     if (!lead) return;
@@ -170,8 +203,38 @@ export function LeadDrawer({
                     />
                   ) : (
                     <p className="mt-2 whitespace-pre-line text-[13px] leading-relaxed text-text">
-                      {editBody || lead.draftBody}
+                      {showTranslation && translation
+                        ? translation
+                        : editBody || lead.draftBody}
                     </p>
+                  )}
+
+                  {/* Çeviri, düzenleme modunda gizlenir: düzenlenen metin orijinaldir,
+                      çeviriyle karıştırılırsa yanlış metin gönderilebilir. */}
+                  {!isEditing && (lead.draftBody || editBody) && (
+                    <div className="mt-3 flex items-center gap-2 border-t border-hair pt-2.5">
+                      <button
+                        onClick={handleToggleTranslation}
+                        disabled={isTranslating}
+                        className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[12px] text-text-muted transition-colors hover:bg-surface-2 hover:text-forest-700 disabled:opacity-60"
+                      >
+                        {isTranslating ? (
+                          <Loader2 className="size-3.5 animate-spin" strokeWidth={2.4} />
+                        ) : (
+                          <Languages className="size-3.5" strokeWidth={2} />
+                        )}
+                        {isTranslating
+                          ? "Çevriliyor..."
+                          : showTranslation
+                            ? "Orijinal"
+                            : "Türkçeye çevir"}
+                      </button>
+                      {showTranslation && (
+                        <span className="text-[11px] text-text-faint">
+                          Çeviri — gönderim orijinal metinle yapılır
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
